@@ -1,0 +1,41 @@
+# Ignore Terraform/OpenTofu directory
+.terraform/
+.tofu/
+
+# Ignore Terraform/OpenTofu state files
+*.tfstate
+*.tfstate.backup
+*.tfstate.*
+
+# Ignore crash logs
+crash.log
+crash.*.log
+
+# Ignore plan output
+*.tfplan
+*.tfplan.*
+
+# Ignore override and backup files
+#*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfvars
+terraform.tfvars.json
+.terraform.lock.hcl
+
+# Sensitive files
+ssh_keys.txt
+my-*.tfvars
+
+# Editor/OS files
+*.swp
+*.swo
+*.bak
+*~
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
