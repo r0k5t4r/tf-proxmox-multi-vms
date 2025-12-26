@@ -27,10 +27,11 @@ output "vm_details" {
 # Output SSH connection commands
 output "ssh_commands" {
   value = {
-    for vm in proxmox_vm_qemu.vms : vm.name => "ssh rocky@${vm.default_ipv4_address}"
+    for vm in proxmox_vm_qemu.vms : vm.name => "ssh ${var.ci_user}@${vm.default_ipv4_address}"
   }
-  description = "SSH commands to connect to each VM"
+  description = "SSH commands to connect to each VM using the configured CI user"
 }
+
 
 # Output additional disk information
 output "vm_additional_disks" {
