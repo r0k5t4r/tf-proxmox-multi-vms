@@ -12,7 +12,7 @@ storage                  = "zfs_vms"
 ci_user                  = "ubuntu"
 ci_password              = "ubuntu"
 ci_upgrade               = false
-cicustom_vendor = "vendor=local:snippets/docker-cloud-init.yaml"
+cicustom_vendor          = "vendor=local:snippets/docker-cloud-init.yaml"
 
 vms = [
   {
