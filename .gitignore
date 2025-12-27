@@ -30,6 +30,9 @@ terraform.tfvars.json
 ssh_keys.txt
 my-*.tfvars
 
+# Rendered cloud-init files
+files/
+
 # Editor/OS files
 *.swp
 *.swo

@@ -33,6 +33,18 @@ variable "proxmox_debug" {
   default     = false
 }
 
+variable "sshuser" {
+  description = "Proxmox user for SSH to copy cloud-init file to snippets dir"
+  type        = string
+  default     = "root"
+}
+
+variable "sshpass" {
+  description = "Proxmox user password for SSH to copy cloud-init file to snippets dir"
+  type        = string
+  default     = null
+}
+
 # VM template and storage variables
 variable "vm_template" {
   description = "The template to clone for creating VMs"
@@ -65,8 +77,14 @@ variable "ci_upgrade" {
   default     = false
 }
 
-variable "cicustom_user" {
-  description = "Optional additional cloud-init user-data YAML"
+variable "cicustom_vendor" {
+  description = "Optional additional cloud-init vendor-data YAML"
+  type        = string
+  default     = ""
+}
+
+variable "domain" {
+  description = "Optional domain name for VMs"
   type        = string
   default     = ""
 }

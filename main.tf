@@ -18,6 +18,7 @@ resource "proxmox_vm_qemu" "vms" {
   
   name = var.vms[count.index].name
   vmid = var.vms[count.index].vmid
+  depends_on = [ null_resource.cloud_init_test1 ]
   target_node = var.proxmox_node
   
   clone = var.vm_template
@@ -163,10 +164,10 @@ resource "proxmox_vm_qemu" "vms" {
   # Cloud-Init Configuration
   ciuser      = var.ci_user
   cipassword  = var.ci_password
-  sshkeys     = file("${path.module}/ssh_keys.txt")  # Temporarily disabled
+  sshkeys     = file("${path.module}/ssh_keys.txt")
   ciupgrade   = var.ci_upgrade
   #cicustom    = length(var.cicustom_user) > 0 ? var.cicustom_user : ""
-  cicustom    = var.cicustom_user
+  cicustom    = var.cicustom_vendor
 
   # Additional VM settings
   tags = join(";", var.vms[count.index].tags)
