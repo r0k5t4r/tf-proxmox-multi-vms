@@ -59,6 +59,18 @@ variable "ci_password" {
   sensitive   = true
 }
 
+variable "ci_upgrade" {
+  description = "Cloud-init update all packages on first boot"
+  type        = bool
+  default     = false
+}
+
+variable "cicustom_user" {
+  description = "Optional additional cloud-init user-data YAML"
+  type        = string
+  default     = ""
+}
+
 # VM configurations
 variable "vms" {
   description = "Configuration for different VMs"

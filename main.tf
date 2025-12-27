@@ -164,7 +164,9 @@ resource "proxmox_vm_qemu" "vms" {
   ciuser      = var.ci_user
   cipassword  = var.ci_password
   sshkeys     = file("${path.module}/ssh_keys.txt")  # Temporarily disabled
-  ciupgrade = true
+  ciupgrade   = var.ci_upgrade
+  #cicustom    = length(var.cicustom_user) > 0 ? var.cicustom_user : ""
+  cicustom    = var.cicustom_user
 
   # Additional VM settings
   tags = join(";", var.vms[count.index].tags)

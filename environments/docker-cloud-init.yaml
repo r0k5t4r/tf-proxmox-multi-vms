@@ -1,0 +1,11 @@
+#cloud-config
+runcmd:
+  - curl -fsSL https://get.docker.com -o get-docker.sh
+  - sh get-docker.sh
+
+groups:
+  - docker
+
+system_info:
+  default_user:
+    groups: [docker]
