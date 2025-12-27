@@ -274,6 +274,18 @@ sudo cloud-init clean
 sudo cloud-init init
 ```
 
+### Reset password
+
+**Issue**:  
+You forgot the password of the default user
+
+```bash
+qm stop 99102
+qm set 99102 --ciuser ubuntu --cipassword ubuntu
+qm start 99102
+
+```
+
 ## Useful Commands
 
 ```bash

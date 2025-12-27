@@ -161,8 +161,8 @@ resource "proxmox_vm_qemu" "vms" {
   ipconfig5 = "manual"
 
   # Cloud-Init Configuration
-  ciuser      = "rocky"
-  cipassword  = "rocky"
+  ciuser      = var.ci_user
+  cipassword  = var.ci_password
   sshkeys     = file("${path.module}/ssh_keys.txt")  # Temporarily disabled
   ciupgrade = true
 
