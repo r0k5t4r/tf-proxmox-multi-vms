@@ -8,12 +8,12 @@ This repository contains OpenTofu (Terraform) configuration for deploying multip
 - **Isolated State Management**: Each environment uses its own state file
 - **Dynamic Disk Configuration**: Support for additional disks (SCSI/VirtIO) for storage nodes
 - **Multi-Network Support**: Configure multiple network interfaces with VLAN support
-- **Cloud-Init Integration**: Automated VM provisioning with SSH key management
+- **Cloud-Init Integration**: Automated VM provisioning with SSH key and user management and custom cloud-init script support without loosing ciuser, cipassword or sshkeys. the cloud-init configs will be merged. :)
 
 ## Prerequisites
 
 - [OpenTofu](https://opentofu.org/) installed
-- Proxmox VE cluster with API access
+- Proxmox VE cluster with API access and optional SSH access for custom cloud-init scripts
 - VM template prepared with cloud-init support - Follow this guide: [Automating VM Deployment in Proxmox using OpenTofu and Cloud-Init](https://www.roksblog.de/automating-vm-deployment-in-proxmox-using-opentofu-and-cloud-init-pt-1/)
 - SSH public keys for VM access
 
@@ -44,6 +44,7 @@ The repository includes several pre-configured environment files in the `environ
 - `openstack-multnode.tfvars` - Multi-node OpenStack production deployment
 - `dev.tfvars` - Development environment
 - `prod.tfvars` - Production environment
+- `custom-cloud-init.tfvars` - Production environment
 
 #### Required Configuration Changes
 
@@ -63,11 +64,18 @@ Before deploying any environment, you **must** adjust the following settings in 
    storage = "zfs_vms"                  # Change to your storage pool name
    ```
 
-3. **Network Configuration**:
+3. **Proxmox Node SSH access**:
+   ```hcl
+   sshuser = "root"                                                       # Change to your Proxmox ssh user -> can be a user with permissions to create files in the snippets dir
+   sshpass = "superSafePassword!123"                                      # Change to your Proxmox ssh user password or use SSH private key
+   cicustom_vendor = "vendor=local:snippets/docker-cloud-init.yaml"       # Change to a different name in case you have multiple
+   ```
+
+4. **Network Configuration**:
    - Verify that the network bridges (e.g., `vmbr0`) exist in your Proxmox setup
    - Adjust IP addresses, VLANs, and gateways to match your network infrastructure
 
-4. **VM IDs**:
+5. **VM IDs**:
    - Check that the VMIDs specified in the configuration are not already in use in your Proxmox environment
    - Adjust VMIDs as necessary to avoid conflicts
 
@@ -100,6 +108,15 @@ tofu apply -var-file="environments/openstack-allinone.tfvars" -state="openstack.
 ```bash
 tofu plan -var-file="environments/dev.tfvars" -state="dev.tfstate" --lock=false
 tofu apply -var-file="environments/dev.tfvars" -state="dev.tfstate" --lock=false
+```
+
+#### Deploy Custom Cloud-Init Environment
+
+A single VM will be deployed. Docker will be installed and the default user will be added to the docker group. A very good example on how to use custom cloud-init scripts without loosing the ciuser, cipassword and sshkeys. We are using vendor instead of user and so the configuration will be merged. 
+
+```bash
+tofu plan -var-file="environments/custom-cloud-init.tfvars" -state="customci.tfstate" --lock=false
+tofu apply -var-file="environments/custom-cloud-init.tfvars" -state="customci.tfstate" --lock=false
 ```
 
 ### State Management
