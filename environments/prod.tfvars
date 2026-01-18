@@ -8,6 +8,10 @@ proxmox_node             = "pve"
 proxmox_tls_insecure     = true
 proxmox_debug            = false
 
+# SSH access to Proxmox host (for snippet upload)
+sshuser = "root"
+sshpass = ""
+
 # VM template
 vm_template = "rocky-9-ci-template"
 # vm_template = "ubuntu-2404-ci-template"
