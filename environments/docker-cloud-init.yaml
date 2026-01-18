@@ -3,9 +3,32 @@ runcmd:
   - curl -fsSL https://get.docker.com -o get-docker.sh
   - sh get-docker.sh
 
+  # User guidance
+  - |
+    cat > /etc/motd <<'EOF'
+    Welcome!
+
+    This system was provisioned using cloud-init (Docker node).
+    Initial setup tasks may still be running in the background.
+
+    You can check the current status with:
+      cloud-init status
+      cloud-init status --wait
+
+    Once cloud-init reports 'done', Docker is ready to use.
+    EOF
+
 groups:
   - docker
 
 system_info:
   default_user:
     groups: [docker]
+
+final_message: |
+  Cloud-init finished.
+
+  Docker installation may still be completing.
+  Check status with:
+    cloud-init status
+    cloud-init status --wait

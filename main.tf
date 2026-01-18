@@ -18,14 +18,17 @@ resource "proxmox_vm_qemu" "vms" {
   
   name = var.vms[count.index].name
   vmid = var.vms[count.index].vmid
-  depends_on = [ null_resource.cloud_init_test1 ]
+  depends_on = [ null_resource.cloud_init ]
   target_node = var.proxmox_node
   
   clone = var.vm_template
   
   # VM Resources
-  cores = var.vms[count.index].cores
-  sockets = var.vms[count.index].sockets
+  cpu {
+    cores = var.vms[count.index].cores
+    sockets = var.vms[count.index].sockets
+    type = "host"
+  }
   memory = var.vms[count.index].memory
   bootdisk = "virtio0"
   scsihw = "virtio-scsi-pci"
@@ -166,8 +169,8 @@ resource "proxmox_vm_qemu" "vms" {
   cipassword  = var.ci_password
   sshkeys     = file("${path.module}/ssh_keys.txt")
   ciupgrade   = var.ci_upgrade
-  #cicustom    = length(var.cicustom_user) > 0 ? var.cicustom_user : ""
-  cicustom    = var.cicustom_vendor
+  cicustom = "vendor=local:snippets/${var.vms[count.index].name}-cloud-init.yaml"
+
 
   # Additional VM settings
   tags = join(";", var.vms[count.index].tags)
@@ -175,7 +178,8 @@ resource "proxmox_vm_qemu" "vms" {
   # Agent configuration
   agent = 1
   full_clone = false
-  onboot = true
+  start_at_node_boot = true
+
 
   # Lifecycle management
   lifecycle {

@@ -1,0 +1,51 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+
+packages:
+  - podman
+  - lvm2
+  - chrony
+  - curl
+  - jq
+
+runcmd:
+  # Ensure time sync (important for Ceph quorum)
+  - systemctl enable --now chronyd
+
+  # Download cephadm
+  - curl -fsSL https://github.com/ceph/ceph/raw/quincy/src/cephadm/cephadm -o /usr/sbin/cephadm
+  - chmod +x /usr/sbin/cephadm
+
+  # Bootstrap dependencies check (non-fatal)
+  - /usr/sbin/cephadm add-repo --release quincy
+  - /usr/sbin/cephadm install ceph-common
+
+  # Verify installation
+  - cephadm version
+
+  # User guidance
+  - |
+    cat > /etc/motd <<'EOF'
+    Welcome!
+
+    This system was provisioned using cloud-init (Ceph node).
+    Initial setup tasks may still be running in the background.
+
+    You can check the current status with:
+      cloud-init status
+      tail -f /var/log/cloud-init.log
+      tail -f /var/log/cloud-init-output.log
+      cloud-init status --wait
+
+    Once cloud-init reports 'done', the system is ready.
+    EOF
+
+final_message: |
+  Cloud-init finished.
+
+  If this is your first login, please verify:
+    cloud-init status
+    tail -f /var/log/cloud-init.log
+    tail -f /var/log/cloud-init-output.log
+    cloud-init status --wait

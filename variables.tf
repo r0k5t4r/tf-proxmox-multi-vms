@@ -39,6 +39,12 @@ variable "sshuser" {
   default     = "root"
 }
 
+variable "default_cloud_init_name" {
+  description = "Default cloud-init file if not specified per VM"
+  type        = string
+  default     = "default-cloud-init.yaml"
+}
+
 variable "sshpass" {
   description = "Proxmox user password for SSH to copy cloud-init file to snippets dir"
   type        = string
@@ -95,6 +101,7 @@ variable "vms" {
   type = list(object({
     name        = string
     vmid        = number
+    cloud_init_name = optional(string)
     cores       = number
     sockets     = number
     memory      = number
