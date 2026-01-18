@@ -13,41 +13,54 @@ It is designed to manage **multiple isolated environments** (Ceph, OpenStack, de
 ## ✨ Features
 
 - **Multiple Environment Support**  
-  Deploy different environments using separate `.tfvars` files (Ceph, OpenStack, dev, prod, etc.)
+  Deploy different environments using separate `.tfvars` files
 
 - **Isolated State Management**  
   Each environment uses its own state file to avoid conflicts
 
 - **Per-VM Cloud-Init Support (with Defaults)**  
   - Global default cloud-init  
-  - Optional per-VM cloud-init override  
-  - Cloud-init configs are merged (vendor data), so `ciuser`, `cipassword`, and `sshkeys` are preserved
+  - Optional per-VM override via `cloud_init_name`  
+  - Cloud-init configs are merged as *vendor data* (no loss of `ciuser`, `cipassword`, `sshkeys`)
 
 - **Multi-Network & VLAN Support**  
-  Attach multiple NICs per VM with VLAN tagging
+  Multiple NICs per VM with VLAN tagging
 
 - **Dynamic Disk Configuration**  
-  Add additional SCSI / VirtIO disks per VM (ideal for Ceph OSDs)
-
-- **Consistent VM Definitions**  
-  All environments share the same schema, making them easy to compare and maintain
+  Additional SCSI / VirtIO disks per VM (ideal for Ceph OSDs)
 
 ---
 
 ## 📋 Prerequisites
 
-- **OpenTofu** installed  
+- **OpenTofu**  
   https://opentofu.org/
 
-- **Proxmox VE** cluster with:
+- **Proxmox VE** with:
   - API access
-  - optional SSH access (used to upload cloud-init snippets)
+  - optional SSH access (for cloud-init snippet upload)
 
-- **Cloud-Init–enabled VM template**  
-  Follow this guide to prepare one:  
+- **Cloud-init enabled VM template**  
+  Guide:  
   https://www.roksblog.de/automating-vm-deployment-in-proxmox-using-opentofu-and-cloud-init-pt-1/
 
-- **SSH public keys** for VM access
+- **SSH public keys** (mandatory)
+
+---
+
+## 🔑 SSH Key Configuration (Important)
+
+You **must** provide an `ssh_keys.txt` file.  
+It will be injected into all VMs via cloud-init.
+
+Example:
+
+```bash
+cat > ssh_keys.txt << 'EOF'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... user@host
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ... user@host
+EOF
+```
 
 ---
 
@@ -71,16 +84,96 @@ tofu init --lock=false
 
 ---
 
-## 🔧 Cloud-Init Model
+## 🔧 Environment Configuration
 
-- A **default cloud-init file** is used for all VMs
-- Individual VMs may override it using:
+Environment definitions are stored in the `environments/` directory.
+
+Examples:
+- `ceph.tfvars`
+- `openstack-allinone.tfvars`
+- `openstack-multinode-dev.tfvars`
+- `dev.tfvars`
+- `prod.tfvars`
+
+Before deploying, adjust in your chosen `.tfvars` file:
+
+```hcl
+proxmox_api_url          = "https://PROXMOX:8006/api2/json"
+proxmox_api_token_id     = "root@pam!terraform"
+proxmox_api_token_secret = "REPLACE_ME"
+
+proxmox_node = "pve"
+vm_template  = "rocky-9-ci-template"
+storage      = "zfs_vms"
+```
+
+Ensure:
+- VMIDs are unique
+- bridges and VLANs exist
+- IP addresses fit your network
+
+---
+
+## 🧩 Cloud-Init Model
+
+- A **default cloud-init file** is applied to all VMs
+- Individual VMs may override it:
 
 ```hcl
 cloud_init_name = "cephadm-cloud-init.yaml"
 ```
 
-- Cloud-init configs are injected as **vendor data**, so base users and SSH keys remain intact
+- Cloud-init is injected as **vendor data**, so base user configuration and SSH keys are preserved
+
+---
+
+## ▶️ Deploying an Environment
+
+### Plan
+
+```bash
+tofu plan   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
+```
+
+### Apply
+
+```bash
+tofu apply   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
+```
+
+---
+
+## 🧹 Destroying an Environment
+
+```bash
+tofu destroy   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
+```
+
+---
+
+## 📦 State Management
+
+Each environment uses its own state file.
+
+Backup example:
+
+```bash
+tofu state pull > backup.tfstate.backup
+```
+
+---
+
+## 📤 Outputs
+
+```bash
+tofu output -state="ceph.tfstate"
+```
+
+Common outputs:
+- `vm_ips`
+- `vm_details`
+- `ssh_commands`
+- `vm_additional_disks`
 
 ---
 
@@ -104,6 +197,51 @@ cloud_init_name = "cephadm-cloud-init.yaml"
 ├── *.tfstate
 └── README.md
 ```
+
+---
+
+## 🛠 Troubleshooting
+
+### State Locking Errors
+
+Use `--lock=false` on SMB/NFS shares.
+
+### `/etc/hosts` Reset on Reboot
+
+Cloud-init regenerates `/etc/hosts`.
+
+Disable by setting in `/etc/cloud/cloud.cfg`:
+
+```yaml
+manage_etc_hosts: false
+```
+
+Then run:
+
+```bash
+sudo cloud-init clean
+sudo cloud-init init
+```
+
+---
+
+## 🧪 Useful Commands
+
+```bash
+tofu validate
+tofu fmt
+tofu show -state="environment.tfstate"
+tofu state list -state="environment.tfstate"
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository  
+2. Create a feature branch  
+3. Test your changes  
+4. Submit a pull request  
 
 ---
 
