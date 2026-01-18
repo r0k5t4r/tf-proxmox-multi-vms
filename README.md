@@ -102,6 +102,10 @@ proxmox_api_url          = "https://PROXMOX:8006/api2/json"
 proxmox_api_token_id     = "root@pam!terraform"
 proxmox_api_token_secret = "REPLACE_ME"
 
+# SSH access to Proxmox host (for snippet upload)
+sshuser = "root"
+sshpass = ""
+
 proxmox_node = "pve"
 vm_template  = "rocky-9-ci-template"
 storage      = "zfs_vms"
