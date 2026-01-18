@@ -210,6 +210,21 @@ Common outputs:
 
 Use `--lock=false` on SMB/NFS shares.
 
+### macOS permission denied on SMB/NFS shares
+
+When running OpenTofu on macOS from SMB/NFS shares, provider binaries cannot be executed due to `noexec` mounts.
+
+**Solution: Use a local plugin cache**
+
+```bash
+mkdir -p ~/.terraform.d/plugin-cache
+export TF_PLUGIN_CACHE_DIR="$HOME/.terraform.d/plugin-cache"
+rm -rf .terraform .terraform.lock.hcl
+tofu init
+```
+
+Provider binaries will be executed locally while the project remains on the network share.
+
 ### `/etc/hosts` Reset on Reboot
 
 Cloud-init regenerates `/etc/hosts`.
