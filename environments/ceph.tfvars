@@ -1,16 +1,6 @@
 # ceph.tfvars
 # Environment configuration for a Ceph lab on Proxmox
-
-proxmox_api_url          = "https://192.168.2.11:8006/api2/json"
-proxmox_api_token_id     = "root@pam!terraform"
-proxmox_api_token_secret = ""
-proxmox_node             = "pve"
-proxmox_tls_insecure     = true
-proxmox_debug            = false
-
-# SSH access to Proxmox host (for snippet upload)
-sshuser = "root"
-sshpass = ""
+# Proxmox API credentials are defined in terraform.tfvars
 
 # VM template used for all nodes
 vm_template = "rocky-9-ci-template"

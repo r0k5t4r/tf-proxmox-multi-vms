@@ -35,6 +35,7 @@ resource "null_resource" "cloud_init" {
     type     = "ssh"
     user     = var.sshuser
     password = var.sshpass
+    private_key = var.ssh_private_key != null ? file(var.ssh_private_key) : null
     host     = var.proxmox_node
   }
 

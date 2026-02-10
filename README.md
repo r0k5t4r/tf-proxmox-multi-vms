@@ -73,7 +73,26 @@ git clone https://github.com/r0k5t4r/tf-proxmox-multi-vms.git
 cd tf-proxmox-multi-vms
 ```
 
-### 2. Initialize OpenTofu
+### 2. Configure Proxmox Credentials
+
+Copy and configure `terraform.tfvars` with your Proxmox API credentials:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your credentials
+```
+
+Contents should include:
+```hcl
+proxmox_api_url          = "https://PROXMOX:8006/api2/json"
+proxmox_api_token_id     = "root@pam!terraform"
+proxmox_api_token_secret = "your-token-secret"
+proxmox_node             = "pve"
+sshuser                  = "root"
+sshpass                  = "your-password"
+```
+
+### 3. Initialize OpenTofu
 
 ```bash
 tofu init --lock=false
@@ -95,63 +114,27 @@ Examples:
 - `dev.tfvars`
 - `prod.tfvars`
 
-Before deploying, adjust in your chosen `.tfvars` file:
+Each environment file defines only **environment-specific settings**:
 
 ```hcl
-proxmox_api_url          = "https://PROXMOX:8006/api2/json"
-proxmox_api_token_id     = "root@pam!terraform"
-proxmox_api_token_secret = "REPLACE_ME"
-
-# SSH access to Proxmox host (for snippet upload)
-sshuser = "root"
-sshpass = ""
-
-proxmox_node = "pve"
+# Environment-specific config (NOT Proxmox credentials)
 vm_template  = "rocky-9-ci-template"
 storage      = "zfs_vms"
+
+vms = [
+  {
+    name       = "dev-web-server"
+    vmid       = 99100
+    # ... VM config
+  }
+]
 ```
 
-Ensure:
-- VMIDs are unique
-- bridges and VLANs exist
-- IP addresses fit your network
+Proxmox credentials come from `terraform.tfvars` (shared across all environments).
 
----
-
-## 🧩 Cloud-Init Model
-
-- A **default cloud-init file** is applied to all VMs
-- Individual VMs may override it:
+Before deploying, ensure in your chosen `.tfvars` file:
 
 ```hcl
-cloud_init_name = "cephadm-cloud-init.yaml"
-```
-
-- Cloud-init is injected as **vendor data**, so base user configuration and SSH keys are preserved
-
----
-
-## ▶️ Deploying an Environment
-
-### Plan
-
-```bash
-tofu plan   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
-```
-
-### Apply
-
-```bash
-tofu apply   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
-```
-
----
-
-## 🧹 Destroying an Environment
-
-```bash
-tofu destroy   -var-file="environments/ceph.tfvars"   -state="ceph.tfstate"   --lock=false
-```
 
 ---
 

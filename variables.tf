@@ -46,7 +46,13 @@ variable "default_cloud_init_name" {
 }
 
 variable "sshpass" {
-  description = "Proxmox user password for SSH to copy cloud-init file to snippets dir"
+  description = "Proxmox user password for SSH to copy cloud-init file to snippets dir (optional if using ssh_private_key)"
+  type        = string
+  default     = null
+}
+
+variable "ssh_private_key" {
+  description = "Path to private SSH key for Proxmox authentication (optional if using sshpass)"
   type        = string
   default     = null
 }

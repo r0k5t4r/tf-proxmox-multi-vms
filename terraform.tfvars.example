@@ -1,0 +1,26 @@
+# terraform.tfvars.example
+# Proxmox connection configuration (common across all environments)
+# Copy this file to terraform.tfvars and fill in your actual values
+
+# Proxmox API Configuration
+proxmox_api_url          = "https://192.168.2.11:8006/api2/json"
+proxmox_api_token_id     = "root@pam!terraform"
+proxmox_api_token_secret = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_node             = "pve"
+proxmox_tls_insecure     = true  # Set to false in production
+proxmox_debug            = false
+
+# SSH Access to Proxmox Host (for cloud-init snippet upload)
+# Choose ONE of the following authentication methods:
+
+# Option 1: Password-based SSH
+sshuser = "root"
+sshpass = "your-proxmox-password"
+
+# Option 2: SSH Key-based (uncomment to use instead of password)
+# sshuser         = "root"
+# ssh_private_key = "~/.ssh/id_rsa"
+
+# Select environment configuration
+# Run: tofu plan -var-file=environments/dev.tfvars
+# or:  tofu plan -var-file=environments/prod.tfvars
