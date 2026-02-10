@@ -146,8 +146,42 @@ vms = [
 Proxmox credentials come from `terraform.tfvars` (shared across all environments).
 
 Before deploying, ensure in your chosen `.tfvars` file:
+- `vm_template` is set to an existing cloud-init template
+- `storage` matches your Proxmox storage pool
+- VM names and VMIDs are unique
+- Network bridges and VLANs exist on Proxmox
+- IP addresses fit your network
 
-```hcl
+---
+
+## ▶️ Deploying an Environment
+
+### Plan
+
+```bash
+tofu plan \
+  -var-file=environments/dev.tfvars \
+  -state=dev.tfstate \
+  --lock=false
+```
+
+### Apply
+
+```bash
+tofu apply \
+  -var-file=environments/dev.tfvars \
+  -state=dev.tfstate \
+  --lock=false
+```
+
+### Destroy
+
+```bash
+tofu destroy \
+  -var-file=environments/dev.tfvars \
+  -state=dev.tfstate \
+  --lock=false
+```
 
 ---
 
