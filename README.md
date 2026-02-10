@@ -82,7 +82,7 @@ cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your credentials
 ```
 
-Contents should include:
+**Option A: Password-based SSH**
 ```hcl
 proxmox_api_url          = "https://PROXMOX:8006/api2/json"
 proxmox_api_token_id     = "root@pam!terraform"
@@ -91,6 +91,19 @@ proxmox_node             = "pve"
 sshuser                  = "root"
 sshpass                  = "your-password"
 ```
+
+**Option B: SSH key-based authentication**
+```hcl
+proxmox_api_url          = "https://PROXMOX:8006/api2/json"
+proxmox_api_token_id     = "root@pam!terraform"
+proxmox_api_token_secret = "your-token-secret"
+proxmox_node             = "pve"
+sshuser                  = "root"
+ssh_private_key          = "~/.ssh/id_rsa"
+```
+
+> **Tip**  
+> SSH key-based authentication is recommended for better security.
 
 ### 3. Initialize OpenTofu
 
