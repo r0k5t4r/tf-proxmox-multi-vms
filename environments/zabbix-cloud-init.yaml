@@ -1,0 +1,157 @@
+#cloud-config
+hostname: ${hostname}
+fqdn: ${fqdn}
+manage_etc_hosts: true
+package_update: true
+package_upgrade: true
+write_files:
+  - path: /etc/motd
+    permissions: "0644"
+    content: |
+      Welcome!
+      This system was provisioned using cloud-init.
+      Useful commands:
+        cloud-init status --wait
+        sudo tail -f /root/provision.log
+  - path: /usr/local/sbin/tpzd-register.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+      echo "==== tpzd-register: start ===="
+      # Values are intended to be templated from Terraform; keep them empty-safe.
+      PROXY_URL="${proxy_url}"
+      NO_PROXY="${no_proxy}"
+      # Token-less registration URL (activation keys etc.). If empty -> skip.
+      KATELLO_REGISTER_URL="${katello_register_url}"
+      # Enforce Katello-only repos via subscription-manager plugin
+      ENFORCE_DISABLE_SYSTEM_REPOS="${enforce_disable_system_repos}"
+      if [[ -n "$${PROXY_URL}" ]]; then
+        export http_proxy="$${PROXY_URL}" https_proxy="$${PROXY_URL}"
+        export HTTP_PROXY="$${PROXY_URL}" HTTPS_PROXY="$${PROXY_URL}"
+        export no_proxy="$${NO_PROXY}" NO_PROXY="$${NO_PROXY}"
+      fi
+      if [[ -n "$${KATELLO_REGISTER_URL}" ]]; then
+        if [[ -f /etc/rhsm/rhsm.conf ]] && command -v subscription-manager >/dev/null 2>&1; then
+          echo "tpzd-register: already registered (rhsm.conf present); skipping register"
+          subscription-manager status || true
+        else
+          echo "tpzd-register: registering via Katello"
+          curl --silent --show-error --insecure "$${KATELLO_REGISTER_URL}" | bash
+        fi
+      else
+        echo "tpzd-register: katello_register_url empty -> skipping registration"
+      fi
+      if [[ "$${ENFORCE_DISABLE_SYSTEM_REPOS:-0}" == "1" ]]; then
+        echo "tpzd-register: enforcing disable_system_repos=1"
+        mkdir -p /etc/dnf/plugins
+        printf '[main]\nenabled=1\ndisable_system_repos=1\n' > /etc/dnf/plugins/subscription-manager.conf
+      fi
+      echo "==== tpzd-register: done ===="
+  - path: /usr/local/sbin/install-zabbix.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+      exec > >(tee -a /root/provision.log) 2>&1
+      echo "==== install-zabbix: start ===="
+      # ---- CONFIG ----
+      # Only used if Zabbix packages are not available via Katello repos.
+      ZBX_REPO_RPM_URL="https://repo.zabbix.com/zabbix/7.4/release/rocky/9/noarch/zabbix-release-latest-7.4.el9.noarch.rpm"
+      ZBX_DB_NAME="zabbix"
+      ZBX_DB_USER="zabbix"
+      ZBX_DB_PASS="changeme"
+      # --------------
+      cd /  # avoid "could not change directory to /root" noise when using sudo -u postgres
+      echo "install-zabbix: ensure dnf tools present"
+      dnf -y install dnf-plugins-core
+      echo "install-zabbix: exclude zabbix* from any repo id containing 'epel' (magic)"
+      # Prevent EPEL from winning if it ships zabbix* too.
+      mapfile -t epel_repoids < <(dnf repolist --enabled | awk 'NR>1{print $1}' | grep -i epel | sort -u || true)
+      for repoid in "$${epel_repoids[@]}"; do
+        dnf config-manager --save --setopt "$${repoid}.exclude=zabbix*"
+      done
+      echo "install-zabbix: ensure Zabbix packages are available via enabled repos"
+      if ! dnf -q repoquery zabbix-server-pgsql >/dev/null 2>&1; then
+        echo "install-zabbix: zabbix-server-pgsql not found in current repos; attempting upstream zabbix-release RPM"
+        if ! rpm -q zabbix-release >/dev/null 2>&1; then
+          rpm -Uvh "$${ZBX_REPO_RPM_URL}"
+          dnf clean all
+        fi
+      fi
+      # If Zabbix repo is Katello-managed and GPG key wasn't imported yet, import it automatically.
+      echo "install-zabbix: import GPG key for enabled zabbix repo(s) (if any)"
+      import_repo_gpgkey() {
+        local repoid="$1"
+        local gpgkey_url
+        gpgkey_url="$(dnf config-manager --dump "$${repoid}" 2>/dev/null | awk -F' = ' '/^gpgkey = /{print $2; exit}')"
+        if [[ -n "$${gpgkey_url}" ]]; then
+          echo "install-zabbix: importing gpgkey for $${repoid} from $${gpgkey_url}"
+          curl -fsSL --insecure "$${gpgkey_url}" | rpm --import -
+        fi
+      }
+      mapfile -t zbx_repoids < <(dnf repolist --enabled | awk 'NR>1{print $1}' | grep -i zabbix | sort -u || true)
+      for repoid in "$${zbx_repoids[@]:-}"; do
+        import_repo_gpgkey "$${repoid}" || true
+      done
+      echo "install-zabbix: install PostgreSQL server"
+      dnf -y install postgresql-server postgresql
+      postgresql-setup --initdb || true
+      systemctl enable --now postgresql
+      echo "install-zabbix: install Zabbix components"
+      dnf -y install \
+        zabbix-server-pgsql \
+        zabbix-web-pgsql \
+        zabbix-apache-conf \
+        zabbix-sql-scripts \
+        zabbix-selinux-policy \
+        zabbix-agent2 \
+        httpd \
+        php-fpm
+      echo "install-zabbix: optional agent2 plugins"
+      dnf -y install \
+        zabbix-agent2-plugin-mongodb \
+        zabbix-agent2-plugin-mssql \
+        zabbix-agent2-plugin-postgresql || true
+      echo "install-zabbix: create DB user (idempotent)"
+      sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$${ZBX_DB_USER}') THEN
+          CREATE ROLE $${ZBX_DB_USER} LOGIN;
+        END IF;
+      END
+      $$
+      ;
+      ALTER ROLE $${ZBX_DB_USER} WITH PASSWORD '$${ZBX_DB_PASS}';
+      SQL
+      echo "install-zabbix: create DB (idempotent)"
+      if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$${ZBX_DB_NAME}'" | grep -q 1; then
+        sudo -u postgres createdb -O "$${ZBX_DB_USER}" "$${ZBX_DB_NAME}"
+      fi
+      echo "install-zabbix: import schema (only if not present)"
+      if ! sudo -u postgres psql -d "$${ZBX_DB_NAME}" -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='users' LIMIT 1;" | grep -q 1; then
+        zcat /usr/share/zabbix/sql-scripts/postgresql/server.sql.gz | sudo -u "$${ZBX_DB_USER}" psql "$${ZBX_DB_NAME}"
+      fi
+      echo "install-zabbix: configure zabbix_server.conf"
+      if grep -q '^[# ]*DBPassword=' /etc/zabbix/zabbix_server.conf; then
+        sed -i "s|^[# ]*DBPassword=.*|DBPassword=$${ZBX_DB_PASS}|g" /etc/zabbix/zabbix_server.conf
+      else
+        echo "DBPassword=$${ZBX_DB_PASS}" >> /etc/zabbix/zabbix_server.conf
+      fi
+      systemctl enable zabbix-server zabbix-agent2 httpd php-fpm
+      systemctl restart zabbix-server zabbix-agent2 httpd php-fpm
+      echo "==== install-zabbix: done ===="
+      echo "Open: http://$(hostname -f)/zabbix"
+runcmd:
+  - [ bash, -lc, "exec > >(tee -a /root/provision.log) 2>&1; echo '==== provision start ===='" ]
+  - [ bash, -lc, "/usr/local/sbin/tpzd-register.sh" ]
+  - [ bash, -lc, "/usr/local/sbin/install-zabbix.sh" ]
+  - [ bash, -lc, "echo '==== provision done ===='" ]
+final_message: |
+  Cloud-init finished.
+  Provision log:
+    sudo tail -f /root/provision.log
+  Zabbix:
+    http://${fqdn}/zabbix
+

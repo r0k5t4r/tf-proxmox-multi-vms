@@ -1,0 +1,33 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee /root/bootstrap-ceph.log) 2>&1
+
+echo "Starting Ceph bootstrap"
+
+cephadm bootstrap \
+  --mon-ip ${bootstrap_ip} \
+  --cluster-network ${cluster_network} \
+  --allow-fqdn-hostname
+
+ceph config set mon public_network ${public_networks}
+
+echo "Installing cephadm SSH key on Ceph hosts"
+
+for host in %{ for node in ceph_nodes ~}${node.ip} %{ endfor ~}; do
+  sshpass -p '${ceph_ssh_pass}' ssh -o StrictHostKeyChecking=no ${ceph_ssh_user}@"$host" \
+    "printf '%s\n' '${ceph_ssh_pass}' | sudo -S mkdir -p /root/.ssh && \
+     printf '%s\n' '${ceph_ssh_pass}' | sudo -S chmod 700 /root/.ssh && \
+     printf '%s\n' \"$(cat /etc/ceph/ceph.pub)\" | sudo tee -a /root/.ssh/authorized_keys >/dev/null && \
+     printf '%s\n' '${ceph_ssh_pass}' | sudo -S chmod 600 /root/.ssh/authorized_keys"
+done
+
+echo "Adding Ceph hosts"
+
+%{ for node in ceph_nodes }
+ceph orch host add ${node.name}${domain != "" ? ".${domain}" : ""} ${node.ip}
+%{ endfor }
+
+echo "Deploying OSDs"
+
+ceph orch apply osd --all-available-devices

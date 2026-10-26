@@ -1,0 +1,67 @@
+#cloud-config
+
+hostname: gedavl-104-0001
+fqdn: gedavl-104-0001.a.space.corp
+
+manage_etc_hosts: true
+
+package_update: false
+package_upgrade: false
+
+write_files:
+  - path: /root/install-katello.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+
+      exec > >(tee /root/katello-install.log) 2>&1
+
+      echo "==== Starting Katello installation ===="
+
+      # Disable firewall in lab environments
+      systemctl disable --now firewalld || true
+
+      dnf clean all
+
+      set -o pipefail && curl --silent --show-error  --insecure 'https://katelloel8.a.space.corp/register?activation_keys=Rocky+Linux+9+x86_64+Katello' --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjo0LCJpYXQiOjE3ODI0ODEwNTcsImp0aSI6IjgzMGU2ZWY4ZmU1NDVhOGZkNDc2NTlkYWVkMGYzOGRiODM4OWEyMmJjZmE0ZTMyZTFlNjJiZTI0ZjU3MTRhNDUiLCJleHAiOjE3ODI0OTU0NTcsInNjb3BlIjoicmVnaXN0cmF0aW9uI2dsb2JhbCByZWdpc3RyYXRpb24jaG9zdCJ9.Fwl9vqDUe51XTBq1KEAt0NRXbhBUBPUSYflkgF0IbqY' | bash
+
+      dnf update
+      dnf -y upgrade
+
+      # Installer
+      dnf -y install foreman-proxy-content
+
+      echo "==== Katello smart-proxy installation finished ===="
+
+runcmd:
+  - |
+    cat > /etc/motd <<'EOF'
+    Welcome!
+
+    This system was provisioned using cloud-init.
+    Some initialization tasks may still be running.
+
+    To check status:
+      cloud-init status
+      tail -f /var/log/cloud-init.log
+      tail -f /var/log/cloud-init-output.log
+      cloud-init status --wait
+    "Katello server installation finished. Access https://katello.lab.local"
+    To check status:
+      sudo tail -f /root/katello-install.log
+
+    EOF
+  - /root/install-katello.sh
+
+final_message: |
+  Cloud-init finished.
+  If this is your first login, please verify cloud-init status.
+  To check status:
+    sudo cloud-init status
+      sudo tail -f /var/log/cloud-init.log
+      sudo tail -f /var/log/cloud-init-output.log
+      sudo cloud-init status --wait
+  "Katello server installation finished. Access https://katello.lab.local"
+  To check status:
+    sudo tail -f /root/katello-install.log

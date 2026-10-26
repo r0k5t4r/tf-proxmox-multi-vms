@@ -1,0 +1,95 @@
+#cloud-config
+
+hostname: katello
+fqdn: katello.fritz.box
+
+manage_etc_hosts: true
+
+package_update: true
+package_upgrade: true
+
+write_files:
+  - path: /root/install-katello.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+
+      exec > >(tee /root/katello-install.log) 2>&1
+
+      echo "==== Starting Katello installation ===="
+
+      # Disable firewall in lab environments
+      systemctl disable --now firewalld || true
+
+      dnf clean all
+
+      # Required repos
+      dnf -y install https://yum.theforeman.org/releases/3.19/el9/x86_64/foreman-release.rpm
+      dnf -y install https://yum.theforeman.org/katello/4.21/katello/el9/x86_64/katello-repos-latest.rpm
+      dnf -y install https://yum.voxpupuli.org/openvox8-release-el-9.noarch.rpm
+      #dnf -y install https://yum.puppet.com/puppet8-release-el-9.noarch.rpm
+
+      dnf -y install rubygem-foreman_fog_proxmox
+      
+      dnf -y upgrade
+
+      # Installer
+      dnf -y install foreman-installer-katello
+
+      echo "==== Running foreman-installer ===="
+
+      foreman-installer \
+        --scenario katello \
+        --foreman-initial-admin-username admin \
+        --foreman-initial-admin-password changeme \
+        --enable-foreman-plugin-remote-execution \
+        --enable-foreman-proxy-plugin-remote-execution-script
+
+
+      echo "==== Configuring hammer CLI ===="
+
+      mkdir -p /root/.hammer
+
+      cat <<EOF > /root/.hammer/cli_config.yml
+      :foreman:
+        :host: https://$(hostname -f)
+        :username: admin
+        :password: changeme
+      EOF
+
+      hammer ping
+
+      echo "==== Katello installation finished ===="
+
+runcmd:
+  - |
+    cat > /etc/motd <<'EOF'
+    Welcome!
+
+    This system was provisioned using cloud-init.
+    Some initialization tasks may still be running.
+
+    To check status:
+      cloud-init status
+      tail -f /var/log/cloud-init.log
+      tail -f /var/log/cloud-init-output.log
+      cloud-init status --wait
+    "Katello server installation finished. Access https://katello.lab.local"
+    To check status:
+      sudo tail -f /root/katello-install.log
+
+    EOF
+  - /root/install-katello.sh
+
+final_message: |
+  Cloud-init finished.
+  If this is your first login, please verify cloud-init status.
+  To check status:
+    sudo cloud-init status
+      sudo tail -f /var/log/cloud-init.log
+      sudo tail -f /var/log/cloud-init-output.log
+      sudo cloud-init status --wait
+  "Katello server installation finished. Access https://katello.lab.local"
+  To check status:
+    sudo tail -f /root/katello-install.log

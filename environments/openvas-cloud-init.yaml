@@ -1,0 +1,135 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - curl
+  - ca-certificates
+  - gnupg
+  - python3
+
+groups:
+  - docker
+
+system_info:
+  default_user:
+    groups: [docker]
+
+write_files:
+  - path: /usr/local/sbin/setup-greenbone.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+
+      DOWNLOAD_DIR=/opt/greenbone-community-container
+      mkdir -p "$DOWNLOAD_DIR"
+      cd "$DOWNLOAD_DIR"
+
+      curl -f -L \
+        https://greenbone.github.io/docs/latest/_static/compose.yaml \
+        -o compose.yaml
+
+      # Optional: expose the web UI to the network instead of localhost only
+      python3 - <<'PY'
+      from pathlib import Path
+
+      p = Path("/opt/greenbone-community-container/compose.yaml")
+      data = p.read_text()
+
+      data = data.replace("127.0.0.1:443:443", "0.0.0.0:443:443")
+      data = data.replace("127.0.0.1:9392:9392", "0.0.0.0:9392:9392")
+
+      p.write_text(data)
+      PY
+
+      docker compose -f compose.yaml pull
+      docker compose -f compose.yaml up -d
+
+  - path: /usr/local/sbin/check-greenbone-feed.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      echo "=== Greenbone container status ==="
+      docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+      echo
+      echo "=== Listening ports ==="
+      ss -tulpen | egrep ':443|:9392' || true
+
+      echo
+      echo "=== Recent gvmd SCAP/feed messages ==="
+      docker logs --tail=200 greenbone-community-edition-gvmd-1 2>&1 | \
+        egrep -i 'update_scap|scap|cpe|cve|feed|succeeded|error' || true
+
+      echo
+      echo "If you still see 'The SCAP database is required' in the UI,"
+      echo "the initial feed import is probably still running."
+
+  - path: /etc/motd
+    permissions: '0644'
+    owner: root:root
+    content: |
+      Welcome!
+
+      This system was provisioned using cloud-init (Docker + Greenbone).
+
+      Important:
+      The Greenbone web UI may already open while the initial feed import
+      is still running in the background.
+
+      During the first start, SCAP/CVE/CPE/VT data still need to be loaded
+      into the databases. This can take quite a while.
+
+      If the UI shows:
+        "The SCAP database is required"
+      this usually means the initial SCAP import is still in progress.
+
+      Useful commands:
+        cloud-init status
+        cloud-init status --wait
+
+        docker ps
+        docker compose -f /opt/greenbone-community-container/compose.yaml logs -f
+        docker logs -f greenbone-community-edition-gvmd-1
+        /usr/local/sbin/check-greenbone-feed.sh
+
+      Web UI:
+        https://<server-ip>
+
+      Note:
+        You may get a browser certificate warning because the default setup
+        uses a self-signed TLS certificate.
+
+runcmd:
+  - curl -fsSL https://get.docker.com -o /root/get-docker.sh
+  - sh /root/get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+  - /usr/local/sbin/setup-greenbone.sh
+
+final_message: |
+  Cloud-init finished.
+
+  Docker and Greenbone were initialized.
+
+  The web UI may already be reachable, but the initial feed import
+  can still be running in the background for a long time.
+
+  Before starting the first scan, make sure feed import has completed.
+
+  Check status with:
+    cloud-init status
+    cloud-init status --wait
+    docker ps
+    docker logs -f greenbone-community-edition-gvmd-1
+    /usr/local/sbin/check-greenbone-feed.sh
+
+  Web UI:
+    https://<server-ip>
+
+  If the UI shows "The SCAP database is required",
+  wait until the gvmd log shows successful SCAP import completion.
