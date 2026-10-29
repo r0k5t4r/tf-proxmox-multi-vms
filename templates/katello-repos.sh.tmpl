@@ -223,6 +223,7 @@ else
   else
     echo "WARN: compute resource creation failed"
   fi
+fi
 %{ if foreman_compute_profiles ~}
 echo "==== Creating compute profiles ===="
 %{ for cp in foreman_compute_profile_list ~}
@@ -247,7 +248,6 @@ else
 fi
 %{ endfor ~}
 %{ endif ~}
-fi
 %{ endif ~}
 
 echo "==== Katello content setup finished ===="
