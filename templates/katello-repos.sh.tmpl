@@ -199,8 +199,8 @@ CR_NAME="${foreman_proxmox_name}"
 if curl -sk -u "$UUSER:$UPASS" "$UHOST/api/compute_resources" | grep -q '"name":"'"$CR_NAME"'"'; then
   echo "compute resource '$CR_NAME' already exists"
 else
-  BODY=$(printf '{"compute_resource":{"name":"%s","provider":"Proxmox","url":"%s","user":"%s","password":"%s","description":"Managed by Terraform","ssl_verify_peer":"false"}}' \
-    "$CR_NAME" "${foreman_proxmox_server}" "${foreman_proxmox_user}" "${foreman_proxmox_password}")
+  BODY=$(printf '{"compute_resource":{"name":"%s","provider":"Proxmox","url":"%s","user":"%s","auth_method":"%s","token_id":"%s","token":"%s","password":"%s","description":"Managed by Terraform","ssl_verify_peer":"false"}}' \
+    "$CR_NAME" "${foreman_proxmox_server}" "${foreman_proxmox_user}" "${foreman_proxmox_auth_method}" "${foreman_proxmox_token_id}" "${foreman_proxmox_password}" "${foreman_proxmox_password}")
   RESP=$(curl -sk -u "$UUSER:$UPASS" -H "Content-Type: application/json" -d "$BODY" "$UHOST/api/compute_resources")
   echo "$RESP" | head -c 240
   echo

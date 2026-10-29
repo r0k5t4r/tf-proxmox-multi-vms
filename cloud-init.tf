@@ -46,6 +46,8 @@ locals {
       foreman_proxmox_name        = var.foreman_proxmox_name
       foreman_proxmox_server      = var.foreman_proxmox_server
       foreman_proxmox_user        = var.foreman_proxmox_user
+      foreman_proxmox_auth_method = var.foreman_proxmox_auth_method
+      foreman_proxmox_token_id    = var.foreman_proxmox_token_id
       foreman_proxmox_password    = var.foreman_proxmox_password
     }
   ) : ""

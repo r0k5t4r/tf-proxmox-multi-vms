@@ -198,8 +198,12 @@ cloud-init):
 
 - `foreman_proxmox_name` (default `Proxmox (pve)`)
 - `foreman_proxmox_server` (default `https://192.168.2.11:8006`)
-- `foreman_proxmox_user` (default `root@pam!terraform` - API token auth; the
-  Proxmox password / token UUID goes into `foreman_proxmox_password`)
+- `foreman_proxmox_user` (default `root@pam`) **plus** `foreman_proxmox_auth_method`
+  (default `user_token`) and `foreman_proxmox_token_id` (default `terraform`,
+  resulting in the token `root@pam!terraform`), whose UUID goes into
+  `foreman_proxmox_password`. For plain password auth set
+  `foreman_proxmox_auth_method = "access_ticket"` and the user password as
+  `foreman_proxmox_password` instead.
 - `ssl_verify_peer` is set to `false` because the PVE ships a self-signed cert.
 
 The setup script uses the Foreman REST API directly (hammer's bundled apidoc

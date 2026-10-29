@@ -296,13 +296,25 @@ variable "foreman_proxmox_server" {
 }
 
 variable "foreman_proxmox_user" {
-  description = "Proxmox API user, either user@realm (Auth ticket) or user@realm!tokenid (API token)"
+  description = "Proxmox API user like root@pam (AuthToken/MFA not included); for token auth append foreman_proxmox_token_id"
   type        = string
-  default     = "root@pam!terraform"
+  default     = "root@pam"
+}
+
+variable "foreman_proxmox_auth_method" {
+  description = "Proxmox auth foreman_fog_proxmox uses: 'user_token' (API token, needs foreman_proxmox_token_id) or 'access_ticket' (user+password)"
+  type        = string
+  default     = "user_token"
+}
+
+variable "foreman_proxmox_token_id" {
+  description = "API token ID when foreman_proxmox_auth_method = user_token (e.g. 'terraform' for root@pam!terraform)"
+  type        = string
+  default     = "terraform"
 }
 
 variable "foreman_proxmox_password" {
-  description = "Proxmox password or API token UUID (secret)"
+  description = "Proxmox password (access_ticket) or API token UUID (user_token), secret"
   type        = string
   sensitive   = true
   default     = ""
