@@ -35,20 +35,30 @@ locals {
     }
   ) : ""
 
+  katello_repos_script = templatefile(
+    "${path.module}/templates/katello-repos.sh.tmpl",
+    {
+      katello_gpg_keys  = var.katello_gpg_keys
+      katello_yum_repos = var.katello_yum_repos
+      katello_deb_repos = var.katello_deb_repos
+    }
+  )
+
   cloud_init_by_vm = {
     for vm in var.vms :
     vm.name => templatefile(
       "${path.module}/environments/${coalesce(vm.cloud_init_name, var.default_cloud_init_name)}",
       {
-        hostname              = vm.name
-        domain                = var.domain
-        fqdn                  = var.domain != "" ? "${vm.name}.${var.domain}" : vm.name
-        ceph_nodes            = local.ceph_nodes
-        ceph_bootstrap_script = local.ceph_bootstrap_script
-        proxy_url                  = var.proxy_url
-        no_proxy                   = var.no_proxy
-        katello_register_url       = var.katello_register_url
+        hostname                     = vm.name
+        domain                       = var.domain
+        fqdn                         = var.domain != "" ? "${vm.name}.${var.domain}" : vm.name
+        ceph_nodes                   = local.ceph_nodes
+        ceph_bootstrap_script        = local.ceph_bootstrap_script
+        proxy_url                    = var.proxy_url
+        no_proxy                     = var.no_proxy
+        katello_register_url         = var.katello_register_url
         enforce_disable_system_repos = var.enforce_disable_system_repos
+        katello_repos_script         = local.katello_repos_script
       }
     )
   }

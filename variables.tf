@@ -157,6 +157,91 @@ variable "enforce_disable_system_repos" {
   default = "1"
 }
 
+# ---------------------------------------------------------------------------
+# Katello content (products & repositories), created post-install by
+# templates/katello-repos.sh.tmpl via the katello cloud-init environment.
+# All repos use download-on-demand so content is only pulled when a
+# registered host actually requests it.
+# ---------------------------------------------------------------------------
+
+variable "katello_gpg_keys" {
+  description = "Content credentials (GPG keys) to create in Katello"
+  type = list(object({
+    name = string
+    url  = string
+  }))
+  default = [
+    { name = "ATIX GPG key", url = "https://oss.atix.de/atix_gpg.pub" },
+    { name = "Rocky 8 GPG key", url = "https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-8" },
+    { name = "Rocky 9 GPG key", url = "https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9" },
+    { name = "Rocky 10 GPG key", url = "https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-10" },
+  ]
+}
+
+variable "katello_yum_repos" {
+  description = "RPM (yum) repositories created in Katello; download-policy on_demand"
+  type = list(object({
+    product         = string
+    name            = string
+    url             = string
+    gpg_key         = optional(string, "")
+    download_policy = optional(string, "on_demand")
+  }))
+  default = [
+    # --- Rocky Linux 8 (CRB is called PowerTools here) ---
+    { product = "Rocky Linux 8", name = "BaseOS", url = "https://dl.rockylinux.org/pub/rocky/8/BaseOS/x86_64/os/", gpg_key = "Rocky 8 GPG key" },
+    { product = "Rocky Linux 8", name = "AppStream", url = "https://dl.rockylinux.org/pub/rocky/8/AppStream/x86_64/os/", gpg_key = "Rocky 8 GPG key" },
+    { product = "Rocky Linux 8", name = "PowerTools", url = "https://dl.rockylinux.org/pub/rocky/8/PowerTools/x86_64/os/", gpg_key = "Rocky 8 GPG key" },
+    { product = "Rocky Linux 8", name = "Extras", url = "https://dl.rockylinux.org/pub/rocky/8/extras/x86_64/os/", gpg_key = "Rocky 8 GPG key" },
+    # --- Rocky Linux 9 ---
+    { product = "Rocky Linux 9", name = "BaseOS", url = "https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/", gpg_key = "Rocky 9 GPG key" },
+    { product = "Rocky Linux 9", name = "AppStream", url = "https://dl.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/", gpg_key = "Rocky 9 GPG key" },
+    { product = "Rocky Linux 9", name = "CRB", url = "https://dl.rockylinux.org/pub/rocky/9/CRB/x86_64/os/", gpg_key = "Rocky 9 GPG key" },
+    { product = "Rocky Linux 9", name = "Extras", url = "https://dl.rockylinux.org/pub/rocky/9/extras/x86_64/os/", gpg_key = "Rocky 9 GPG key" },
+    # --- Rocky Linux 10 ---
+    { product = "Rocky Linux 10", name = "BaseOS", url = "https://dl.rockylinux.org/pub/rocky/10/BaseOS/x86_64/os/", gpg_key = "Rocky 10 GPG key" },
+    { product = "Rocky Linux 10", name = "AppStream", url = "https://dl.rockylinux.org/pub/rocky/10/AppStream/x86_64/os/", gpg_key = "Rocky 10 GPG key" },
+    { product = "Rocky Linux 10", name = "CRB", url = "https://dl.rockylinux.org/pub/rocky/10/CRB/x86_64/os/", gpg_key = "Rocky 10 GPG key" },
+    { product = "Rocky Linux 10", name = "Extras", url = "https://dl.rockylinux.org/pub/rocky/10/extras/x86_64/os/", gpg_key = "Rocky 10 GPG key" },
+  ]
+}
+
+variable "katello_deb_repos" {
+  description = "Debian/Ubuntu (deb) repositories created in Katello; ATIX repo provides subscription-manager for Katello registration"
+  type = list(object({
+    product         = string
+    name            = string
+    url             = string
+    releases        = string # deb suite(s), whitespace separated
+    components      = string # deb components, whitespace separated
+    architectures   = optional(string, "amd64")
+    gpg_key         = optional(string, "")
+    download_policy = optional(string, "on_demand")
+  }))
+  default = [
+    # --- Ubuntu 20.04 (focal, EOL Standard Support 2025 - base repos remain available) ---
+    { product = "Ubuntu 20.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "focal", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 20.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "focal-updates", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 20.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "focal-security", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 20.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu20LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    # --- Ubuntu 22.04 (jammy) ---
+    { product = "Ubuntu 22.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "jammy", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 22.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "jammy-updates", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 22.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "jammy-security", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 22.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu22LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    # --- Ubuntu 24.04 (noble) ---
+    { product = "Ubuntu 24.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "noble", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 24.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "noble-updates", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 24.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "noble-security", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 24.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu24LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    # --- Ubuntu 26.04 (resolute) ---
+    { product = "Ubuntu 26.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "resolute", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 26.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "resolute-updates", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 26.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "resolute-security", components = "main restricted universe multiverse" },
+    { product = "Ubuntu 26.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu26LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+  ]
+}
+
 # VM configurations
 variable "vms" {
   description = "Configuration for different VMs"

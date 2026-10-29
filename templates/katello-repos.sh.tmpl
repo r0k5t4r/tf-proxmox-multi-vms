@@ -1,0 +1,121 @@
+#!/bin/bash
+# Creates Katello products, repositories and GPG content credentials.
+# Rendered by OpenTofu (templates/katello-repos.sh.tmpl) from the
+# katello_gpg_keys / katello_yum_repos / katello_deb_repos variables.
+# All repositories use download policy "on_demand" - content is only
+# pulled from upstream when a registered host actually consumes it.
+# Logs: /root/katello-repos.log
+
+set -uo pipefail
+
+exec > >(tee /root/katello-repos.log) 2>&1
+
+ORG="Default Organization"
+
+echo "==== Creating Katello content (products/repos) ===="
+
+if ! hammer ping >/dev/null 2>&1; then
+  echo "ERROR: hammer/Foreman API unreachable - aborting"
+  exit 1
+fi
+
+gpg_id() {
+  hammer content-credential info --organization "$ORG" --name "$1" 2>/dev/null \
+    | awk '/^ *Id:/{print $2; exit}'
+}
+
+ensure_product() {
+  hammer product create --organization "$ORG" --name "$1" \
+    --description "Managed by Terraform" 2>/dev/null \
+    || echo "product '$1' already exists"
+}
+
+# ------------------------------------------------------------------
+# GPG content credentials
+# ------------------------------------------------------------------
+mkdir -p /root/gpg-keys
+
+%{ for i, key in katello_gpg_keys ~}
+if curl -sSf --max-time 30 -o /root/gpg-keys/gpg-${i}.key "${key.url}"; then
+  if ! hammer content-credential info --organization "$ORG" --name "${key.name}" >/dev/null 2>&1; then
+    hammer content-credential create --organization "$ORG" --name "${key.name}" \
+      --content-type gpg --key /root/gpg-keys/gpg-${i}.key \
+      || echo "WARN: could not create content credential '${key.name}'"
+  else
+    echo "content credential '${key.name}' already exists"
+  fi
+  chmod 644 /root/gpg-keys/gpg-${i}.key
+else
+  echo "WARNING: could not download GPG key from ${key.url}"
+fi
+%{ endfor ~}
+
+# ------------------------------------------------------------------
+# Yum (RPM) repositories
+# ------------------------------------------------------------------
+%{ for r in katello_yum_repos ~}
+ensure_product "${r.product}"
+GPG_ARGS=""
+%{ if r.gpg_key != "" ~}
+GPG_ID=$(gpg_id "${r.gpg_key}")
+if [ -n "$GPG_ID" ]; then GPG_ARGS="--gpg-key-id $GPG_ID"; fi
+%{ endif ~}
+echo "Creating yum repo ${r.product} / ${r.name}"
+hammer repository create \
+  --organization "$ORG" \
+  --product "${r.product}" \
+  --name "${r.name}" \
+  --content-type yum \
+  --url "${r.url}" \
+  --download-policy "${r.download_policy}" \
+  $GPG_ARGS \
+  || echo "WARN: yum repo ${r.name} failed (already exists?)"
+%{ endfor ~}
+
+# ------------------------------------------------------------------
+# Deb (Debian/Ubuntu) repositories
+# ------------------------------------------------------------------
+%{ for r in katello_deb_repos ~}
+ensure_product "${r.product}"
+GPG_ARGS=""
+%{ if r.gpg_key != "" ~}
+GPG_ID=$(gpg_id "${r.gpg_key}")
+if [ -n "$GPG_ID" ]; then GPG_ARGS="--gpg-key-id $GPG_ID"; fi
+%{ endif ~}
+echo "Creating deb repo ${r.product} / ${r.name}"
+hammer repository create \
+  --organization "$ORG" \
+  --product "${r.product}" \
+  --name "${r.name}" \
+  --content-type deb \
+  --url "${r.url}" \
+  --deb-releases "${r.releases}" \
+  --deb-components "${r.components}" \
+  --deb-architectures "${r.architectures}" \
+  --download-policy "${r.download_policy}" \
+  $GPG_ARGS \
+  || echo "WARN: deb repo ${r.name} failed (already exists?)"
+%{ endfor ~}
+
+# ------------------------------------------------------------------
+# Kick off a metadata sync in the background for every product
+# (with on_demand this pulls repo metadata; packages are only
+# downloaded when a host asks for them)
+# ------------------------------------------------------------------
+echo "==== Triggering background syncs ===="
+PRODUCTS_FILE=$(mktemp)
+%{ for r in katello_yum_repos ~}
+echo "${r.product}" >> "$PRODUCTS_FILE"
+%{ endfor ~}
+%{ for r in katello_deb_repos ~}
+echo "${r.product}" >> "$PRODUCTS_FILE"
+%{ endfor ~}
+
+sort -u "$PRODUCTS_FILE" | while read -r p; do
+  hammer product synchronize --async --organization "$ORG" --name "$p" \
+    >/dev/null 2>&1 || echo "WARN: sync trigger failed for '$p'"
+done
+rm -f "$PRODUCTS_FILE"
+
+echo "==== Katello content setup finished ===="
+hammer product list 2>/dev/null | head -20
