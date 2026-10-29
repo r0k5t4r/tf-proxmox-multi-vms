@@ -62,7 +62,7 @@ if curl -sSf --max-time 30 -o /root/gpg-keys/gpg-${i}.key "${key.url}"; then
   chmod 644 /root/gpg-keys/gpg-${i}.key
   if ! hammer content-credential info --organization "$ORG" --name "${key.name}" >/dev/null 2>&1; then
     hammer content-credential create --organization "$ORG" --name "${key.name}" \
-      --content-type gpg --path /root/gpg-keys/gpg-${i}.key \
+      --content-type gpg_key --path /root/gpg-keys/gpg-${i}.key \
       || echo "WARN: could not create content credential '${key.name}'"
   else
     echo "content credential '${key.name}' already exists"
@@ -169,6 +169,7 @@ sort -u "$PRODUCTS_FILE" | while read -r p; do
   else
     if hammer content-view publish --async --name "$p" --organization "$ORG" >/dev/null 2>&1; then
       echo "publish queued: $p"
+      echo "$p" >> "$SENTINEL"
     else
       echo "WARN: publish failed for '$p' (retry after sync finished)"
     fi
