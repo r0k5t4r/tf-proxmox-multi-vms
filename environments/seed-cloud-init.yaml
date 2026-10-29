@@ -196,9 +196,42 @@ write_files:
       localhost ansible_connection=local
       EOF
 
-      sed -n '1,/^\[deployment\]/{p; /^\[deployment\]/{n;p}}' "$${INVENTORY_HOSTS_PATH}" > "$${INVENTORY_PATH}.new"
-      sed -n '/^\[deployment\]/,$ p' "$${UPSTREAM_MULTINODE_PATH}" | tail -n +3 >> "$${INVENTORY_PATH}.new"
-      mv "$${INVENTORY_PATH}.new" "$${INVENTORY_PATH}"
+      python3 - <<'PY'
+      from pathlib import Path
+      import re
+
+      upstream = Path("$${UPSTREAM_MULTINODE_PATH}")
+      out = Path("$${INVENTORY_PATH}")
+      text = upstream.read_text()
+
+      def set_group(content, group, members):
+          pattern = re.compile(r"(?ms)^\[" + re.escape(group) + r"\]\s*\n.*?(?=^\[)")
+          repl = "[" + group + "]\n" + "\n".join(members) + "\n"
+          if pattern.search(content):
+              return pattern.sub(lambda m: repl, content, count=1)
+          return content
+
+      # Lab layout: network / storage / monitoring roles run on the control
+      # group hosts; the [-children] definitions from upstream stay intact
+      # (incl. the nova-metadata group required since kolla-ansible 2025.1).
+      text = set_group(text, "network", ["control01", "control02", "control03"])
+      text = set_group(text, "compute", ["compute01", "compute02"])
+      text = set_group(text, "monitoring", ["control01"])
+      text = set_group(text, "storage", ["control01"])
+
+      # lab credentials (rocky/rocky, sudo NOPASSWD)
+      if "[all:vars]" not in text:
+          text += """
+      [all:vars]
+      ansible_user=rocky
+      ansible_password=rocky
+      ansible_become=true
+      ansible_become_password=rocky
+      """
+
+      out.write_text(text)
+      print("inventory written to", out)
+      PY
       chown -R rocky:rocky "$${KOLLA_HOME}"
 
       write_globals no
