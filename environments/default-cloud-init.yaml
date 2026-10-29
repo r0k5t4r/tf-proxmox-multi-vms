@@ -2,6 +2,13 @@
 package_update: true
 package_upgrade: false
 
+# The rocky-9-ci-template image ships a baked-in
+# /etc/ssh/sshd_config.d/50-cloud-init.conf with "PasswordAuthentication no"
+# (from the template build at 2025-04-27). Without this line kolla bootstrap
+# (ansible_password / sshpass) cannot log in on fresh nodes.
+ssh_pwauth: true
+
+
 runcmd:
   - |
     cat > /etc/motd <<'EOF'
