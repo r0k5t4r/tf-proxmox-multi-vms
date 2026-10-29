@@ -79,11 +79,11 @@ locals {
     vm.name => templatefile(
       "${path.module}/templates/omnios-base-user-data.yaml.tmpl",
       {
-        hostname         = vm.name
-        fqdn             = var.domain != "" ? "${vm.name}.${var.domain}" : vm.name
-        domain           = var.domain
-        nameserver       = var.omnios_nameserver != "" ? var.omnios_nameserver : "192.168.2.2"
-        ssh_keys_block   = join("\n", [for line in compact(split("\n", file("${path.module}/ssh_keys.txt"))) : "      - ${line}"])
+        hostname       = vm.name
+        fqdn           = var.domain != "" ? "${vm.name}.${var.domain}" : vm.name
+        domain         = var.domain
+        nameserver     = var.omnios_nameserver != "" ? var.omnios_nameserver : "192.168.2.2"
+        ssh_keys_block = join("\n", [for line in compact(split("\n", file("${path.module}/ssh_keys.txt"))) : "      - ${line}"])
         static_net_runcmd = vm.network_config[0].ip == "dhcp" ? "" : join("\n", [
           "    /usr/sbin/ipadm delete-addr eth0/dhcp 2>/dev/null || true",
           "    /usr/sbin/ipadm delete-if eth0 2>/dev/null || true",

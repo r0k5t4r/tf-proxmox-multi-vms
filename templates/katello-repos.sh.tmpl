@@ -176,6 +176,15 @@ sort -u "$PRODUCTS_FILE" | while read -r p; do
   fi
 done
 
+# activation keys can only be created after the content views have a
+# published version in the Library - wait for the publish tasks
+echo "==== Waiting for content view publishes to finish (max 10 min) ===="
+for i in $(seq 1 20); do
+  p=$(hammer task list 2>/dev/null | grep -c "Publish content view" || true)
+  [ "$p" -eq 0 ] && break
+  sleep 30
+done
+
 sort -u "$PRODUCTS_FILE" | while read -r p; do
   ensure_ak "AK $p" "$p"
 done

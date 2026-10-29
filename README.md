@@ -177,9 +177,14 @@ catalog of content, driven by these variables (all defaults live in `variables.t
 - `katello_deb_repos` - Ubuntu 20.04 / 22.04 / 24.04 / 26.04 (`focal`, `jammy`,
   `noble`, `resolute`) each with Base, Updates and Security (main, restricted,
   universe, multiverse).
+- `katello_debian_repos` - Debian 12 (bookworm) and 13 (trixie) each with Base,
+  Updates and Security (main, contrib, non-free, non-free-firmware) from
+  deb.debian.org / security.debian.org.
 - `katello_subscription_manager_deb_repos` - a dedicated product
-  (`ATIX Subscription Manager`) holding the ATIX `subscription-manager` repositories
-  required to register Ubuntu hosts with Katello (one repository per release).
+  (`ATIX Subscription Manager`) holding the ATIX `subscription-manager`
+  repositories required to register Ubuntu AND Debian hosts with Katello
+  (one repository per release: Ubuntu 20.04/22.04/24.04/26.04 and Debian
+  12/13).
 - `katello_activation_keys` (default `true`) - after the repositories exist the
   setup creates a rolling content view per product (containing all repositories of
   that product), publishes it and creates an activation key `AK <product>` pointed
