@@ -223,29 +223,28 @@ else
   else
     echo "WARN: compute resource creation failed"
   fi
-
 %{ if foreman_compute_profiles ~}
-  echo "==== Creating compute profiles ===="
+echo "==== Creating compute profiles ===="
 %{ for cp in foreman_compute_profile_list ~}
+CPID=$(hammer compute-profile info --name "${cp.name}" 2>/dev/null | awk '/^ *Id:/{print $2}')
+if [ -z "$CPID" ]; then
+  hammer compute-profile create --name "${cp.name}" >/dev/null 2>&1
   CPID=$(hammer compute-profile info --name "${cp.name}" 2>/dev/null | awk '/^ *Id:/{print $2}')
-  if [ -z "$CPID" ]; then
-    hammer compute-profile create --name "${cp.name}" >/dev/null 2>&1
-    CPID=$(hammer compute-profile info --name "${cp.name}" 2>/dev/null | awk '/^ *Id:/{print $2}')
-  fi
-  if [ -n "$CPID" ]; then
-    if curl -sk -u "$UUSER:$UPASS" "$UHOST/api/compute_profiles/$CPID/compute_resources/1/compute_attributes" 2>/dev/null | grep -q '"id"'; then
-      echo "compute profile '${cp.name}' values already set"
-    else
-      BODY=$(printf '{"compute_attribute":{"compute_attributes":{"type":"qemu","nodes":"pve","cores":"%s","sockets":"1","kvm":"1","vga":"std","memory":"%s","ostype":"l26","cpu":"cputype=kvm64","scsihw":"virtio-scsi-pci","templated":"0","boot":"cn","volumes_attributes":{"0":{"storage":"zfs_vms","size":"%s","controller":"virtio","device":0,"id":"virtio0","options":{"cache":"none","backup":"1"}}},"interfaces_attributes":{"0":{"id":"net0","model":"virtio","bridge":"vmbr0","name":""}}}}}' \
-        "${cp.cores}" "${cp.memory}" "${cp.size}")
-      RESP_CP=$(curl -sk -u "$UUSER:$UPASS" -H "Content-Type: application/json" -d "$BODY" "$UHOST/api/compute_profiles/$CPID/compute_resources/1/compute_attributes")
-      echo "$RESP_CP" | grep -q '"id"' \
-        && echo "compute profile '${cp.name}' values set (id $CPID)" \
-        || echo "WARN: compute profile '${cp.name}' values failed"
-    fi
+fi
+if [ -n "$CPID" ]; then
+  if curl -sk -u "$UUSER:$UPASS" "$UHOST/api/compute_profiles/$CPID/compute_resources/1/compute_attributes" 2>/dev/null | grep -q '"id"'; then
+    echo "compute profile '${cp.name}' values already set"
   else
-    echo "WARN: compute profile '${cp.name}' could not be created"
+    BODY=$(printf '{"compute_attribute":{"compute_attributes":{"type":"qemu","nodes":"pve","cores":"%s","sockets":"1","kvm":"1","vga":"std","memory":"%s","ostype":"l26","cpu":"cputype=kvm64","scsihw":"virtio-scsi-pci","templated":"0","boot":"cn","volumes_attributes":{"0":{"storage":"zfs_vms","size":"%s","controller":"virtio","device":0,"id":"virtio0","options":{"cache":"none","backup":"1"}}},"interfaces_attributes":{"0":{"id":"net0","model":"virtio","bridge":"vmbr0","name":""}}}}}' \
+      "${cp.cores}" "${cp.memory}" "${cp.size}")
+    RESP_CP=$(curl -sk -u "$UUSER:$UPASS" -H "Content-Type: application/json" -d "$BODY" "$UHOST/api/compute_profiles/$CPID/compute_resources/1/compute_attributes")
+    echo "$RESP_CP" | grep -q '"id"' \
+      && echo "compute profile '${cp.name}' values set (id $CPID)" \
+      || echo "WARN: compute profile '${cp.name}' values failed"
   fi
+else
+  echo "WARN: compute profile '${cp.name}' could not be created"
+fi
 %{ endfor ~}
 %{ endif ~}
 fi
