@@ -101,7 +101,7 @@ write_files:
 
         cat > "$${GLOBALS_PATH}" <<EOF
       kolla_base_distro: "rocky"
-      openstack_release: "2024.1"
+      openstack_release: "2025.1"
       kolla_internal_vip_address: "192.168.20.250"
       network_interface: "$${MGMT_IF}"
       neutron_external_interface: "$${EXT_IF}"
@@ -157,8 +157,8 @@ write_files:
       fi
 
       sudo -u rocky "$${VENV_PATH}/bin/pip" install --upgrade pip
-      sudo -u rocky "$${VENV_PATH}/bin/pip" install 'ansible-core>=2.15,<2.16'
-      sudo -u rocky "$${VENV_PATH}/bin/pip" install "git+https://opendev.org/openstack/kolla-ansible@unmaintained/2024.1"
+      sudo -u rocky "$${VENV_PATH}/bin/pip" install 'ansible-core>=2.15,<2.18'
+      sudo -u rocky "$${VENV_PATH}/bin/pip" install "git+https://opendev.org/openstack/kolla-ansible@stable/2025.1"
 
       cp -r "$${VENV_PATH}/share/kolla-ansible/etc_examples/kolla/." /etc/kolla/
       chown -R rocky:rocky /etc/kolla
