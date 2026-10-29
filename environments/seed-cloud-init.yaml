@@ -148,12 +148,15 @@ write_files:
         exit 1
       fi
 
-      dnf install -y git python3 python3-devel python3-libselinux libffi-devel gcc openssl-devel sshpass curl jq skopeo podman python3-podman
+      # kolla-ansible stable/2025.1 requires Python >= 3.10; Rocky 9 system
+      # python is 3.9, so we provision python3.11 from AppStream and build
+      # the virtualenv with it.
+      dnf install -y git python3.11 python3.11-devel python3 python3-pip python3-libselinux libffi-devel gcc openssl-devel sshpass curl jq skopeo podman python3-podman
 
       mkdir -p /etc/kolla /etc/ansible "$${KOLLA_HOME}"
       chown -R rocky:rocky /etc/kolla "$${KOLLA_HOME}"
       if [[ ! -d "$${VENV_PATH}" ]]; then
-        sudo -u rocky python3 -m venv "$${VENV_PATH}"
+        sudo -u rocky python3.11 -m venv "$${VENV_PATH}"
       fi
 
       sudo -u rocky "$${VENV_PATH}/bin/pip" install --upgrade pip
