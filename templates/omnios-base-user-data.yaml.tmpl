@@ -1,0 +1,60 @@
+#cloud-config
+#
+# OmniOS per-VM override — rendered per VM and attached via cicustom user=.
+# Replaces the template's default snippet so every clone gets its own
+# hostname (PVE's generated user-data is overridden by cicustom, and the
+# nocloud meta-data carries no name).
+#
+# Based on the learnings from tf-creator-omnios:
+# - `network: config: disabled` is REQUIRED (the illumos cloud-init port
+#   cannot apply Proxmox's nocloud network-config; the guest NIC is eth0
+#   there, while Proxmox generates net0). DHCP is handled natively by
+#   illumos nwamd; if a static IP was configured (network_config[0]),
+#   it is applied via persistent ipadm/route settings instead.
+# - guest agent package is ooce/util/qemu-ga (extra.omnios publisher) and
+#   needs its state dir. NOTE: no virtio-serial driver in r151058 → the
+#   PVE agent channel does not bind; SSH remains the ops channel.
+#
+
+network:
+  config: disabled
+
+hostname: ${fqdn}
+timezone: Europe/Berlin
+
+disable_root: false
+
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+${ssh_keys_block}
+
+write_files:
+  - path: /etc/resolv.conf
+    permissions: '0644'
+    content: |
+      search ${domain}
+      nameserver ${nameserver}
+
+runcmd:
+  - |
+    cat > /etc/motd <<'EOF'
+
+    This OmniOS VM was provisioned with tf-proxmox-multi-vms from the
+    omnios-r151058-template (official OmniOS cloud image + cloud-init).
+
+    EOF
+  # guest agent best effort (see notes above — no virtio-serial on PVE for now)
+  - |
+    mkdir -p /var/opt/ooce/qemu/run
+    /usr/bin/pkg install -q ooce/util/qemu-ga >/dev/null 2>&1 \
+      && /usr/sbin/svcadm enable ooce/system/qemu-ga >/dev/null 2>&1 \
+      || echo "qemu-ga install/enable failed (publisher/network?)" >&2
+  # static IP via persistent ipadm/route settings (skip with ip = dhcp)
+  - |
+${static_net_runcmd}
+
+final_message: |
+  cloud-init on OmniOS finished after $UPTIME seconds.
+  Verify: hostname, ipadm show-addr (eth0), svcs -a | grep cloud-init

@@ -447,3 +447,43 @@ variable "vms" {
     }
   ]
 }
+
+# OmniOS VMs (cloned from the omnios-r151058-template created by tf-creator-omnios)
+variable "omnios_template" {
+  description = "Clone source for OmniOS VMs (template name or VMID as string)"
+  default     = "omnios-r151058-template"
+}
+
+variable "omnios_nameserver" {
+  description = "DNS server written to /etc/resolv.conf in OmniOS VMs (cloud-init network is disabled on illumos)"
+  default     = ""
+}
+
+variable "omnios_vms" {
+  description = "OmniOS VM configuration — same shape as vms. NOTE: ip in network_config[0] can be 'dhcp' (native illumos DHCP) or a static CIDR. Static/gw changes are applied via persistent ipadm/route. disk_size must exceed the template disk (20G) when full_clone = false."
+  type = list(object({
+    name            = string
+    vmid            = number
+    cloud_init_name = optional(string)
+    cores           = number
+    sockets         = number
+    memory          = number
+    disk_size       = string
+    network_config = list(object({
+      model   = string
+      bridge  = string
+      vlan    = optional(number, 0)
+      ip      = string
+      gateway = string
+    }))
+    description = string
+    tags        = list(string)
+    additional_disks = optional(list(object({
+      storage = string
+      size    = string
+      cache   = optional(string, "none")
+      type    = optional(string, "scsi") # scsi, virtio, ide, sata
+    })), [])
+  }))
+  default = []
+}

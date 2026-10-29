@@ -73,6 +73,29 @@ locals {
     )
   }
 
+  # OmniOS-specific per-VM user-data (cicustom user=)
+  omnios_user_data_by_vm = {
+    for vm in var.omnios_vms :
+    vm.name => templatefile(
+      "${path.module}/templates/omnios-base-user-data.yaml.tmpl",
+      {
+        hostname         = vm.name
+        fqdn             = var.domain != "" ? "${vm.name}.${var.domain}" : vm.name
+        domain           = var.domain
+        nameserver       = var.omnios_nameserver != "" ? var.omnios_nameserver : "192.168.2.2"
+        ssh_keys_block   = join("\n", [for line in compact(split("\n", file("${path.module}/ssh_keys.txt"))) : "      - ${line}"])
+        static_net_runcmd = vm.network_config[0].ip == "dhcp" ? "" : join("\n", [
+          "    /usr/sbin/ipadm delete-addr eth0/dhcp 2>/dev/null || true",
+          "    /usr/sbin/ipadm delete-if eth0 2>/dev/null || true",
+          "    /usr/sbin/ipadm create-if eth0",
+          "    /usr/sbin/ipadm create-addr -T static -a ${vm.network_config[0].ip} eth0/v4",
+          "    /usr/sbin/route -p delete default 2>/dev/null || true",
+          "    /usr/sbin/route -p add default ${vm.network_config[0].gateway}",
+        ])
+      }
+    )
+  }
+
 }
 
 # Create a local copy of the rendered cloud-init file
@@ -102,5 +125,36 @@ resource "null_resource" "cloud_init" {
   provisioner "file" {
     source      = local_file.cloud_init[each.key].filename
     destination = "${var.snippet_upload_dir}/${each.key}-cloud-init.yaml"
+  }
+}
+
+# OmniOS per-VM user-data snippet upload (cicustom user=)
+resource "local_file" "omnios_user_data" {
+  for_each = local.omnios_user_data_by_vm
+
+  content  = each.value
+  filename = "${path.module}/files/${each.key}-omnios-user-data.yaml"
+}
+
+resource "null_resource" "omnios_user_data" {
+  for_each = local.omnios_user_data_by_vm
+
+  triggers = {
+    checksum = sha256(each.value)
+  }
+
+  depends_on = [local_file.omnios_user_data]
+
+  connection {
+    type        = "ssh"
+    user        = var.sshuser
+    password    = var.sshpass
+    private_key = var.ssh_private_key != null ? file(var.ssh_private_key) : null
+    host        = var.ssh_host != null ? var.ssh_host : var.proxmox_node
+  }
+
+  provisioner "file" {
+    source      = local_file.omnios_user_data[each.key].filename
+    destination = "${var.snippet_upload_dir}/${each.key}-omnios-user-data.yaml"
   }
 }
