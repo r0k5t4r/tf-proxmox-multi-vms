@@ -183,5 +183,34 @@ done
 
 rm -f "$PRODUCTS_FILE"
 
+%{ if foreman_proxmox_integration && foreman_proxmox_password != "" ~}
+# ------------------------------------------------------------------
+# Register the Proxmox node as a Foreman compute resource
+# (hammer's cached apidoc doesn't know the Proxmox provider enum,
+# so the REST API is used directly)
+# ------------------------------------------------------------------
+echo "==== Creating Proxmox compute resource ===="
+HCONF=/root/.hammer/cli_config.yml
+UHOST=$(awk '/:host:/{print $2}' "$HCONF")
+UUSER=$(awk '/:username:/{print $2}' "$HCONF")
+UPASS=$(awk '/:password:/{print $2}' "$HCONF")
+CR_NAME="${foreman_proxmox_name}"
+
+if curl -sk -u "$UUSER:$UPASS" "$UHOST/api/compute_resources" | grep -q '"name":"'"$CR_NAME"'"'; then
+  echo "compute resource '$CR_NAME' already exists"
+else
+  BODY=$(printf '{"compute_resource":{"name":"%s","provider":"Proxmox","url":"%s","user":"%s","password":"%s","description":"Managed by Terraform","ssl_verify_peer":"false"}}' \
+    "$CR_NAME" "${foreman_proxmox_server}" "${foreman_proxmox_user}" "${foreman_proxmox_password}")
+  RESP=$(curl -sk -u "$UUSER:$UPASS" -H "Content-Type: application/json" -d "$BODY" "$UHOST/api/compute_resources")
+  echo "$RESP" | head -c 240
+  echo
+  if echo "$RESP" | grep -q '"id"'; then
+    echo "compute resource '$CR_NAME' created"
+  else
+    echo "WARN: compute resource creation failed"
+  fi
+fi
+%{ endif ~}
+
 echo "==== Katello content setup finished ===="
 hammer product list 2>/dev/null | head -25

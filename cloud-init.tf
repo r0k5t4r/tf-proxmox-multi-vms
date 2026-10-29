@@ -38,10 +38,15 @@ locals {
   katello_repos_script = var.katello_content_automation ? templatefile(
     "${path.module}/templates/katello-repos.sh.tmpl",
     {
-      katello_gpg_keys        = var.katello_gpg_keys
-      katello_yum_repos       = var.katello_yum_repos
-      katello_deb_all         = concat(var.katello_deb_repos, var.katello_subscription_manager_deb_repos)
-      katello_activation_keys = var.katello_activation_keys
+      katello_gpg_keys            = var.katello_gpg_keys
+      katello_yum_repos           = var.katello_yum_repos
+      katello_deb_all             = concat(var.katello_deb_repos, var.katello_subscription_manager_deb_repos)
+      katello_activation_keys     = var.katello_activation_keys
+      foreman_proxmox_integration = var.foreman_proxmox_integration
+      foreman_proxmox_name        = var.foreman_proxmox_name
+      foreman_proxmox_server      = var.foreman_proxmox_server
+      foreman_proxmox_user        = var.foreman_proxmox_user
+      foreman_proxmox_password    = var.foreman_proxmox_password
     }
   ) : ""
 

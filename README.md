@@ -189,6 +189,25 @@ All repositories use `download_policy = "on_demand"`, so package content is only
 downloaded from upstream when a registered host actually consumes it (metadata is
 synced in the background at setup time).
 
+## Foreman <-> Proxmox integration (optional)
+
+With `foreman_proxmox_integration = true` (default `false`) the katello
+environment additionally registers the Proxmox node as a compute resource in
+Foreman (requires the `foreman_fog_proxmox` plugin, installed by the katello
+cloud-init):
+
+- `foreman_proxmox_name` (default `Proxmox (pve)`)
+- `foreman_proxmox_server` (default `https://192.168.2.11:8006`)
+- `foreman_proxmox_user` (default `root@pam!terraform` - API token auth; the
+  Proxmox password / token UUID goes into `foreman_proxmox_password`)
+- `ssl_verify_peer` is set to `false` because the PVE ships a self-signed cert.
+
+The setup script uses the Foreman REST API directly (hammer's bundled apidoc
+cache does not know the Proxmox provider enum). The script is idempotent: it
+checks for an existing compute resource by name first, then exits otherwise.
+`compute profiles` are not created automatically - configure them in the
+Foreman UI if desired.
+
 The setup script runs from the `katello` cloud-init file right after
 `foreman-installer` (`/root/katello-repos.sh`, log `/root/katello-repos.log`);
 it is idempotent and can be re-run manually.

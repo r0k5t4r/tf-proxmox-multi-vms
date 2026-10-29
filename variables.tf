@@ -259,7 +259,7 @@ variable "katello_subscription_manager_deb_repos" {
 }
 
 variable "katello_content_automation" {
-  description = "Create the Katello products/repositories/content-views/activation-keys baked into the katello environment (current-state managed via cloud-init run of templates/katello-repos.sh.tmpl; content-views for each product incl. AK names 'AK <product>')"
+  description = "Create the Katello products/repositories/content-views/activation-keys baked into the katello environment (runs post install via templates/katello-repos.sh.tmpl)"
   type        = bool
   default     = true
 }
@@ -268,6 +268,44 @@ variable "katello_activation_keys" {
   description = "Configure rolling content views (one per product) and activation keys (AK <product>) referencing them"
   type        = bool
   default     = true
+}
+
+# ---------------------------------------------------------------------------
+# Foreman <-> Proxmox compute resource integration (optional).
+# Registers the Proxmox node in Foreman via foreman_fog_proxmox. The default
+# user root@pam!terraform expects an existing PVE API token; pass its UUID in
+# foreman_proxmox_password.
+# ---------------------------------------------------------------------------
+
+variable "foreman_proxmox_integration" {
+  description = "Register the Proxmox node as a compute resource in Foreman (katello environment only)"
+  type        = bool
+  default     = false
+}
+
+variable "foreman_proxmox_name" {
+  description = "Name of the compute resource in Foreman"
+  type        = string
+  default     = "Proxmox (pve)"
+}
+
+variable "foreman_proxmox_server" {
+  description = "Proxmox VE API endpoint"
+  type        = string
+  default     = "https://192.168.2.11:8006"
+}
+
+variable "foreman_proxmox_user" {
+  description = "Proxmox API user, either user@realm (Auth ticket) or user@realm!tokenid (API token)"
+  type        = string
+  default     = "root@pam!terraform"
+}
+
+variable "foreman_proxmox_password" {
+  description = "Proxmox password or API token UUID (secret)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 # VM configurations
