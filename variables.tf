@@ -320,6 +320,31 @@ variable "foreman_proxmox_password" {
   default     = ""
 }
 
+variable "foreman_compute_profiles" {
+  description = "Create per-OS compute profiles on the Proxmox compute resource (only when foreman_proxmox_integration is enabled)"
+  type        = bool
+  default     = true
+}
+
+variable "foreman_compute_profile_list" {
+  description = "Compute profiles to create: name, cores, memory (MB), disk size (GB) on zfs_vms with a virtio net0 interface on vmbr0"
+  type = list(object({
+    name   = string
+    cores  = number
+    memory = number
+    size   = number
+  }))
+  default = [
+    { name = "Katello - Ubuntu 20.04", cores = 2, memory = 2048, size = 20 },
+    { name = "Katello - Ubuntu 22.04", cores = 2, memory = 4096, size = 20 },
+    { name = "Katello - Ubuntu 24.04", cores = 2, memory = 4096, size = 20 },
+    { name = "Katello - Ubuntu 26.04", cores = 4, memory = 8192, size = 40 },
+    { name = "Katello - Rocky 8", cores = 4, memory = 8192, size = 40 },
+    { name = "Katello - Rocky 9", cores = 4, memory = 8192, size = 40 },
+    { name = "Katello - Rocky 10", cores = 4, memory = 8192, size = 40 },
+  ]
+}
+
 # VM configurations
 variable "vms" {
   description = "Configuration for different VMs"
