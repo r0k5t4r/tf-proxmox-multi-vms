@@ -163,6 +163,36 @@ The Ceph bootstrap script template uses:
 
 There is no separate Terraform variable for Ceph `public_network` yet. In the current setup, cephadm infers the public network from the bootstrap monitor IP passed via `--mon-ip`.
 
+## Katello Content Automation
+
+The `katello` environment provisions not only the Foreman/Katello server but also a
+catalog of content, driven by these variables (all defaults live in `variables.tf`):
+
+- `katello_content_automation` (default `true`) - master switch; when `false` no
+  content is created and the cloud-init file omits the repo setup script entirely.
+- `katello_gpg_keys` - content credentials imported into Katello
+  (ATIX GPG key, Rocky 8/9/10 keys).
+- `katello_yum_repos` - Rocky Linux 8/9/10 (BaseOS, AppStream, CRB - called
+  `PowerTools` on Rocky 8, Extras), `gpg_key` attached per repository.
+- `katello_deb_repos` - Ubuntu 20.04 / 22.04 / 24.04 / 26.04 (`focal`, `jammy`,
+  `noble`, `resolute`) each with Base, Updates and Security (main, restricted,
+  universe, multiverse).
+- `katello_subscription_manager_deb_repos` - a dedicated product
+  (`ATIX Subscription Manager`) holding the ATIX `subscription-manager` repositories
+  required to register Ubuntu hosts with Katello (one repository per release).
+- `katello_activation_keys` (default `true`) - after the repositories exist the
+  setup creates a rolling content view per product (containing all repositories of
+  that product), publishes it and creates an activation key `AK <product>` pointed
+  at the content view + the `Library` lifecycle environment.
+
+All repositories use `download_policy = "on_demand"`, so package content is only
+downloaded from upstream when a registered host actually consumes it (metadata is
+synced in the background at setup time).
+
+The setup script runs from the `katello` cloud-init file right after
+`foreman-installer` (`/root/katello-repos.sh`, log `/root/katello-repos.log`);
+it is idempotent and can be re-run manually.
+
 ## Cloud-Init Layout
 
 Relevant files:

@@ -1,9 +1,10 @@
 #!/bin/bash
-# Creates Katello products, repositories and GPG content credentials.
+# Creates Katello content: products, repositories (download on demand),
+# GPG content credentials, rolling content views (one per product) and
+# activation keys (AK <product>).
 # Rendered by OpenTofu (templates/katello-repos.sh.tmpl) from the
-# katello_gpg_keys / katello_yum_repos / katello_deb_repos variables.
-# All repositories use download policy "on_demand" - content is only
-# pulled from upstream when a registered host actually consumes it.
+# katello_gpg_keys / katello_yum_repos / katello_deb_repos /
+# katello_subscription_manager_deb_repos variables.
 # Logs: /root/katello-repos.log
 
 set -uo pipefail
@@ -11,13 +12,16 @@ set -uo pipefail
 exec > >(tee /root/katello-repos.log) 2>&1
 
 ORG="Default Organization"
+SENTINEL="/root/katello-repos.published"
 
-echo "==== Creating Katello content (products/repos) ===="
+echo "==== Creating Katello content (products/repos/CVs/AKs) ===="
 
 if ! hammer ping >/dev/null 2>&1; then
   echo "ERROR: hammer/Foreman API unreachable - aborting"
   exit 1
 fi
+
+touch "$SENTINEL"
 
 gpg_id() {
   hammer content-credential info --organization "$ORG" --name "$1" 2>/dev/null \
@@ -30,6 +34,24 @@ ensure_product() {
     || echo "product '$1' already exists"
 }
 
+cv_id() {
+  hammer content-view info --organization "$ORG" --name "$1" 2>/dev/null \
+    | awk '/^ *Id:/{print $2; exit}'
+}
+
+ensure_cv() {
+  hammer content-view create --organization "$ORG" --name "$1" 2>/dev/null \
+    || echo "content view '$1' already exists"
+}
+
+ensure_ak() {
+  hammer activation-key info --organization "$ORG" --name "$1" >/dev/null 2>&1 \
+    || hammer activation-key create --organization "$ORG" --name "$1" \
+         --content-view "${2}" --lifecycle-environment Library \
+         --unlimited-hosts 2>&1 \
+    || echo "WARN: activation key '$1' create failed"
+}
+
 # ------------------------------------------------------------------
 # GPG content credentials
 # ------------------------------------------------------------------
@@ -37,14 +59,14 @@ mkdir -p /root/gpg-keys
 
 %{ for i, key in katello_gpg_keys ~}
 if curl -sSf --max-time 30 -o /root/gpg-keys/gpg-${i}.key "${key.url}"; then
+  chmod 644 /root/gpg-keys/gpg-${i}.key
   if ! hammer content-credential info --organization "$ORG" --name "${key.name}" >/dev/null 2>&1; then
     hammer content-credential create --organization "$ORG" --name "${key.name}" \
-      --content-type gpg --key /root/gpg-keys/gpg-${i}.key \
+      --content-type gpg --path /root/gpg-keys/gpg-${i}.key \
       || echo "WARN: could not create content credential '${key.name}'"
   else
     echo "content credential '${key.name}' already exists"
   fi
-  chmod 644 /root/gpg-keys/gpg-${i}.key
 else
   echo "WARNING: could not download GPG key from ${key.url}"
 fi
@@ -73,9 +95,9 @@ hammer repository create \
 %{ endfor ~}
 
 # ------------------------------------------------------------------
-# Deb (Debian/Ubuntu) repositories
+# Deb (Debian/Ubuntu) repositories incl. ATIX subscription-manager
 # ------------------------------------------------------------------
-%{ for r in katello_deb_repos ~}
+%{ for r in katello_deb_all ~}
 ensure_product "${r.product}"
 GPG_ARGS=""
 %{ if r.gpg_key != "" ~}
@@ -98,16 +120,14 @@ hammer repository create \
 %{ endfor ~}
 
 # ------------------------------------------------------------------
-# Kick off a metadata sync in the background for every product
-# (with on_demand this pulls repo metadata; packages are only
-# downloaded when a host asks for them)
+# Background metadata sync for every product
 # ------------------------------------------------------------------
 echo "==== Triggering background syncs ===="
 PRODUCTS_FILE=$(mktemp)
 %{ for r in katello_yum_repos ~}
 echo "${r.product}" >> "$PRODUCTS_FILE"
 %{ endfor ~}
-%{ for r in katello_deb_repos ~}
+%{ for r in katello_deb_all ~}
 echo "${r.product}" >> "$PRODUCTS_FILE"
 %{ endfor ~}
 
@@ -115,7 +135,52 @@ sort -u "$PRODUCTS_FILE" | while read -r p; do
   hammer product synchronize --async --organization "$ORG" --name "$p" \
     >/dev/null 2>&1 || echo "WARN: sync trigger failed for '$p'"
 done
+
+# ------------------------------------------------------------------
+# Rolling content views (one per product, all repos of the product) + AKs
+# ------------------------------------------------------------------
+%{ if katello_activation_keys ~}
+echo "==== Creating rolling content views & activation keys ===="
+
+sort -u "$PRODUCTS_FILE" | while read -r p; do
+  ensure_cv "$p"
+done
+
+%{ for r in katello_yum_repos ~}
+CVID=$(cv_id "${r.product}")
+if [ -n "$CVID" ]; then
+  hammer content-view add-repository --id "$CVID" --product "${r.product}" --repository "${r.name}" \
+    >/dev/null 2>&1 \
+    || echo "repo ${r.name} already in CV ${r.product}"
+fi
+%{ endfor ~}
+%{ for r in katello_deb_all ~}
+CVID=$(cv_id "${r.product}")
+if [ -n "$CVID" ]; then
+  hammer content-view add-repository --id "$CVID" --product "${r.product}" --repository "${r.name}" \
+    >/dev/null 2>&1 \
+    || echo "repo ${r.name} already in CV ${r.product}"
+fi
+%{ endfor ~}
+
+sort -u "$PRODUCTS_FILE" | while read -r p; do
+  if grep -qx "$p" "$SENTINEL" 2>/dev/null; then
+    echo "CV '$p' already published (sentinel)"
+  else
+    if hammer content-view publish --async --name "$p" --organization "$ORG" >/dev/null 2>&1; then
+      echo "publish queued: $p"
+    else
+      echo "WARN: publish failed for '$p' (retry after sync finished)"
+    fi
+  fi
+done
+
+sort -u "$PRODUCTS_FILE" | while read -r p; do
+  ensure_ak "AK $p" "$p"
+done
+%{ endif ~}
+
 rm -f "$PRODUCTS_FILE"
 
 echo "==== Katello content setup finished ===="
-hammer product list 2>/dev/null | head -20
+hammer product list 2>/dev/null | head -25

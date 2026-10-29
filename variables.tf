@@ -207,7 +207,7 @@ variable "katello_yum_repos" {
 }
 
 variable "katello_deb_repos" {
-  description = "Debian/Ubuntu (deb) repositories created in Katello; ATIX repo provides subscription-manager for Katello registration"
+  description = "Debian/Ubuntu (deb) base/update/security repositories created in Katello"
   type = list(object({
     product         = string
     name            = string
@@ -223,23 +223,51 @@ variable "katello_deb_repos" {
     { product = "Ubuntu 20.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "focal", components = "main restricted universe multiverse" },
     { product = "Ubuntu 20.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "focal-updates", components = "main restricted universe multiverse" },
     { product = "Ubuntu 20.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "focal-security", components = "main restricted universe multiverse" },
-    { product = "Ubuntu 20.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu20LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
     # --- Ubuntu 22.04 (jammy) ---
     { product = "Ubuntu 22.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "jammy", components = "main restricted universe multiverse" },
     { product = "Ubuntu 22.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "jammy-updates", components = "main restricted universe multiverse" },
     { product = "Ubuntu 22.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "jammy-security", components = "main restricted universe multiverse" },
-    { product = "Ubuntu 22.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu22LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
     # --- Ubuntu 24.04 (noble) ---
     { product = "Ubuntu 24.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "noble", components = "main restricted universe multiverse" },
     { product = "Ubuntu 24.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "noble-updates", components = "main restricted universe multiverse" },
     { product = "Ubuntu 24.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "noble-security", components = "main restricted universe multiverse" },
-    { product = "Ubuntu 24.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu24LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
     # --- Ubuntu 26.04 (resolute) ---
     { product = "Ubuntu 26.04", name = "Base", url = "https://archive.ubuntu.com/ubuntu", releases = "resolute", components = "main restricted universe multiverse" },
     { product = "Ubuntu 26.04", name = "Updates", url = "https://archive.ubuntu.com/ubuntu", releases = "resolute-updates", components = "main restricted universe multiverse" },
     { product = "Ubuntu 26.04", name = "Security", url = "https://security.ubuntu.com/ubuntu", releases = "resolute-security", components = "main restricted universe multiverse" },
-    { product = "Ubuntu 26.04", name = "Subscription Manager (ATIX)", url = "https://oss.atix.de/Ubuntu26LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
   ]
+}
+
+variable "katello_subscription_manager_deb_repos" {
+  description = "Separate product holding the ATIX subscription-manager repos (one per supported Ubuntu release); hosts need this for Katello registration"
+  type = list(object({
+    product         = string
+    name            = string
+    url             = string
+    releases        = string
+    components      = string
+    architectures   = optional(string, "amd64")
+    gpg_key         = optional(string, "")
+    download_policy = optional(string, "on_demand")
+  }))
+  default = [
+    { product = "ATIX Subscription Manager", name = "Ubuntu 20.04", url = "https://oss.atix.de/Ubuntu20LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    { product = "ATIX Subscription Manager", name = "Ubuntu 22.04", url = "https://oss.atix.de/Ubuntu22LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    { product = "ATIX Subscription Manager", name = "Ubuntu 24.04", url = "https://oss.atix.de/Ubuntu24LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    { product = "ATIX Subscription Manager", name = "Ubuntu 26.04", url = "https://oss.atix.de/Ubuntu26LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+  ]
+}
+
+variable "katello_content_automation" {
+  description = "Create the Katello products/repositories/content-views/activation-keys baked into the katello environment (current-state managed via cloud-init run of templates/katello-repos.sh.tmpl; content-views for each product incl. AK names 'AK <product>')"
+  type        = bool
+  default     = true
+}
+
+variable "katello_activation_keys" {
+  description = "Configure rolling content views (one per product) and activation keys (AK <product>) referencing them"
+  type        = bool
+  default     = true
 }
 
 # VM configurations

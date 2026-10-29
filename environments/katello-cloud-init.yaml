@@ -62,10 +62,12 @@ write_files:
 
       echo "==== Katello installation finished ===="
 
+%{ if katello_repos_script != "" }
   - path: /root/katello-repos.sh
     permissions: "0755"
     content: |
       ${replace(katello_repos_script, "\n", "\n      ")}
+%{ endif }
 
 runcmd:
   - |
@@ -86,7 +88,10 @@ runcmd:
 
     EOF
   - /root/install-katello.sh
+
+%{ if katello_repos_script != "" }
   - /root/katello-repos.sh
+%{ endif }
 
 final_message: |
   Cloud-init finished.
