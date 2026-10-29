@@ -255,6 +255,8 @@ variable "katello_subscription_manager_deb_repos" {
     { product = "ATIX Subscription Manager", name = "Ubuntu 22.04", url = "https://oss.atix.de/Ubuntu22LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
     { product = "ATIX Subscription Manager", name = "Ubuntu 24.04", url = "https://oss.atix.de/Ubuntu24LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
     { product = "ATIX Subscription Manager", name = "Ubuntu 26.04", url = "https://oss.atix.de/Ubuntu26LTS/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    { product = "ATIX Subscription Manager", name = "Debian 12", url = "https://oss.atix.de/Debian12/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
+    { product = "ATIX Subscription Manager", name = "Debian 13", url = "https://oss.atix.de/Debian13/", releases = "stable", components = "main", gpg_key = "ATIX GPG key" },
   ]
 }
 
@@ -276,6 +278,30 @@ variable "katello_activation_keys" {
 # user root@pam!terraform expects an existing PVE API token; pass its UUID in
 # foreman_proxmox_password.
 # ---------------------------------------------------------------------------
+
+variable "katello_debian_repos" {
+  description = "Debian (deb) base/update/security repositories created in Katello (Debian 12 bookworm, Debian 13 trixie)"
+  type = list(object({
+    product         = string
+    name            = string
+    url             = string
+    releases        = string
+    components      = string
+    architectures   = optional(string, "amd64")
+    gpg_key         = optional(string, "")
+    download_policy = optional(string, "on_demand")
+  }))
+  default = [
+    # --- Debian 12 (bookworm) ---
+    { product = "Debian 12", name = "Base", url = "https://deb.debian.org/debian", releases = "bookworm", components = "main contrib non-free non-free-firmware" },
+    { product = "Debian 12", name = "Updates", url = "https://deb.debian.org/debian", releases = "bookworm-updates", components = "main contrib non-free non-free-firmware" },
+    { product = "Debian 12", name = "Security", url = "https://security.debian.org/debian-security", releases = "bookworm-security", components = "main contrib non-free non-free-firmware" },
+    # --- Debian 13 (trixie) ---
+    { product = "Debian 13", name = "Base", url = "https://deb.debian.org/debian", releases = "trixie", components = "main contrib non-free non-free-firmware" },
+    { product = "Debian 13", name = "Updates", url = "https://deb.debian.org/debian", releases = "trixie-updates", components = "main contrib non-free non-free-firmware" },
+    { product = "Debian 13", name = "Security", url = "https://security.debian.org/debian-security", releases = "trixie-security", components = "main contrib non-free non-free-firmware" },
+  ]
+}
 
 variable "foreman_proxmox_integration" {
   description = "Register the Proxmox node as a compute resource in Foreman (katello environment only)"
@@ -339,6 +365,8 @@ variable "foreman_compute_profile_list" {
     { name = "Katello - Ubuntu 22.04", cores = 2, memory = 4096, size = 20 },
     { name = "Katello - Ubuntu 24.04", cores = 2, memory = 4096, size = 20 },
     { name = "Katello - Ubuntu 26.04", cores = 4, memory = 8192, size = 40 },
+    { name = "Katello - Debian 12", cores = 2, memory = 4096, size = 20 },
+    { name = "Katello - Debian 13", cores = 4, memory = 8192, size = 40 },
     { name = "Katello - Rocky 8", cores = 4, memory = 8192, size = 40 },
     { name = "Katello - Rocky 9", cores = 4, memory = 8192, size = 40 },
     { name = "Katello - Rocky 10", cores = 4, memory = 8192, size = 40 },
