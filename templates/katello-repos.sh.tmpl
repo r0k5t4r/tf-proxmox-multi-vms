@@ -212,8 +212,8 @@ else
     # Book route: write the attrs json/yaml directly via psql (the script
     # runs as root on the Foreman/Katello host).
     {
-      printf 'update compute_resources set attrs = $attrs$\n'
-      printf -- '---\n:auth_method: %s\n:token_id: %s\n:token: %s\n' \
+      printf 'update compute_resources set attrs = $attrs$---\n'
+      printf -- ':auth_method: %s\n:token_id: %s\n:token: %s\n' \
         "${foreman_proxmox_auth_method}" "${foreman_proxmox_token_id}" "${foreman_proxmox_password}"
       printf '$attrs$\n'
     } > /tmp/cr-attrs.sql
