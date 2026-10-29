@@ -290,9 +290,9 @@ variable "foreman_proxmox_name" {
 }
 
 variable "foreman_proxmox_server" {
-  description = "Proxmox VE API endpoint"
+  description = "Proxmox VE API endpoint (must include /api2/json - fog-proxmox expects it)"
   type        = string
-  default     = "https://192.168.2.11:8006"
+  default     = "https://192.168.2.11:8006/api2/json"
 }
 
 variable "foreman_proxmox_user" {

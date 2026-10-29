@@ -206,6 +206,20 @@ else
   echo
   if echo "$RESP" | grep -q '"id"'; then
     echo "compute resource '$CR_NAME' created"
+    CRIDv=$(echo "$RESP" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    # The API controller filters out the Proxmox auth fields (auth_method/
+    # token/token_id) - the Foreman web UI writes them, the API does not.
+    # Book route: write the attrs json/yaml directly via psql (the script
+    # runs as root on the Foreman/Katello host).
+    {
+      printf 'update compute_resources set attrs = $attrs$\n'
+      printf -- '---\n:auth_method: %s\n:token_id: %s\n:token: %s\n' \
+        "${foreman_proxmox_auth_method}" "${foreman_proxmox_token_id}" "${foreman_proxmox_password}"
+      printf '$attrs$\n'
+    } > /tmp/cr-attrs.sql
+    su - postgres -s /bin/bash -c "psql -h /var/run/postgresql -d foreman -f /tmp/cr-attrs.sql" \
+      || echo "WARN: could not persist Proxmox auth attrs via psql"
+    rm -f /tmp/cr-attrs.sql /tmp/cr-attrs.yaml
   else
     echo "WARN: compute resource creation failed"
   fi

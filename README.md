@@ -197,7 +197,10 @@ Foreman (requires the `foreman_fog_proxmox` plugin, installed by the katello
 cloud-init):
 
 - `foreman_proxmox_name` (default `Proxmox (pve)`)
-- `foreman_proxmox_server` (default `https://192.168.2.11:8006`)
+- `foreman_proxmox_server` (default `https://192.168.2.11:8006/api2/json` - the
+  `/api2/json` suffix is required by fog-proxmox; a plain `:8006` in the
+  compute resource URL causes `ERF42 ... no such file '/access/ticket'`
+  style errors).
 - `foreman_proxmox_user` (default `root@pam`) **plus** `foreman_proxmox_auth_method`
   (default `user_token`) and `foreman_proxmox_token_id` (default `terraform`,
   resulting in the token `root@pam!terraform`), whose UUID goes into
