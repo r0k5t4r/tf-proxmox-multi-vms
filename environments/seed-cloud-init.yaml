@@ -1,0 +1,296 @@
+#cloud-config
+# Seed node for the kolla-ansible OpenStack lab.
+# IMPORTANT: this file runs on the seed (VM 9601) and drives the full
+# multinode kolla deployment against control01-03 / compute01-02.
+#
+# Cloud-init network interfaces (masked by qm ipconfig0-4):
+#   eth0 = host network 192.168.2.x (additional VIP traffic)
+#   eth1 = mgmt network  192.168.20.x (kolla)
+#   eth4 = neutron external (192.168.9.x)
+#
+# Fixes vs. the first (failed) deployment from March 2026:
+#  1. bootstrap-servers runs BEFORE the image pull. In the failed run the
+#     pull stage invoked the kolla_container module on the control/compute
+#     nodes, which need podman CLI + python3-podman on the targets; back
+#     then neither was installed yet (python3-podman is missing on rockies)
+#     -> every node failed with ModuleNotFoundError: No module named
+#     'podman'.
+#  2. kolla-ansible does NOT install python3-podman (only the podman CLI
+#     package list of the baremetal role), so we install podman +
+#     python3-podman explicitly on the seed and all target nodes.
+#  3. python3-podman is also installed on the seed, because the
+#     localhost/deployment entry executes kolla_container modules for
+#     pull/deploy as well.
+hostname: seed
+fqdn: seed.fritz.box
+manage_etc_hosts: false
+create_hostname_file: true
+preserve_hostname: false
+ssh_pwauth: true
+package_update: true
+package_upgrade: false
+
+packages:
+  - chrony
+  - curl
+  - git
+  - jq
+  - python3
+  - python3-pip
+  - python3-libselinux
+  - sshpass
+
+write_files:
+  - path: /root/bootstrap-kolla-seed.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+
+      exec > >(tee -a /var/log/bootstrap-kolla-seed.log) 2>&1
+
+      VENV_PATH=/home/rocky/kolla-venv
+      KOLLA_HOME=/home/rocky/kolla-ansible
+      INVENTORY_PATH="$${KOLLA_HOME}/multinode"
+      INVENTORY_HOSTS_PATH="$${KOLLA_HOME}/multinode-hosts"
+      UPSTREAM_MULTINODE_PATH="$${VENV_PATH}/share/kolla-ansible/ansible/inventory/multinode"
+      GLOBALS_PATH=/etc/kolla/globals.yml
+      ANSIBLE_CFG_PATH=/etc/ansible/ansible.cfg
+      DEPLOY_USER='rocky'
+      DEPLOY_PASS='rocky'
+
+      get_interface_by_index() {
+        local interface_index="$1"
+        ip -o link show | awk -F': ' '$2 != "lo" { print $2 }' | sed 's/@.*//' | sed -n "$((interface_index + 1))p"
+      }
+
+      wait_for_ssh() {
+        local host_name="$1"
+        local host_ip="$2"
+
+        until sshpass -p "$${DEPLOY_PASS}" ssh \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o ConnectTimeout=5 \
+          -o PreferredAuthentications=password \
+          -o PubkeyAuthentication=no \
+          "$${DEPLOY_USER}@$${host_ip}" \
+          'sudo -n true >/dev/null 2>&1 || sudo true >/dev/null 2>&1'; do
+          echo "Waiting for SSH on $${host_name} ($${host_ip})"
+          sleep 10
+        done
+      }
+
+      install_podman_on_node() {
+        local host_name="$1"
+        local host_ip="$2"
+
+        sshpass -p "$${DEPLOY_PASS}" ssh \
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o ConnectTimeout=5 \
+          -o PreferredAuthentications=password \
+          -o PubkeyAuthentication=no \
+          "$${DEPLOY_USER}@$${host_ip}" \
+          "sudo -n dnf -y install podman python3-podman"
+        echo "podman/python3-podman installed on $${host_name} ($${host_ip})"
+      }
+
+      write_globals() {
+        local include_registry="$1"
+
+        cat > "$${GLOBALS_PATH}" <<EOF
+      kolla_base_distro: "rocky"
+      openstack_release: "2024.1"
+      kolla_internal_vip_address: "192.168.20.250"
+      network_interface: "$${MGMT_IF}"
+      neutron_external_interface: "$${EXT_IF}"
+      nova_compute_virt_type: "qemu"
+      kolla_container_engine: "podman"
+      EOF
+
+        if [[ "$${include_registry}" == "yes" && -n "192.168.20.146:4000" ]]; then
+          cat >> "$${GLOBALS_PATH}" <<EOF
+
+      docker_registry: "192.168.20.146:4000"
+      docker_registry_insecure: "yes"
+      EOF
+        fi
+
+        chown rocky:rocky "$${GLOBALS_PATH}"
+      }
+
+      sync_images_to_registry() {
+        local registry_url="192.168.20.146:4000"
+
+        if [[ -z "$${registry_url}" ]]; then
+          return 0
+        fi
+
+        mapfile -t images < <(sudo -u rocky bash -lc "podman images --format '{{.Repository}}:{{.Tag}}' | grep '^quay.io/openstack.kolla/' | sort -u")
+
+        for image in "$${images[@]}"; do
+          local image_name image_tag target_image
+          image_name="$${image#quay.io/}"
+          image_tag="$${image_name##*:}"
+          image_name="$${image_name%:*}"
+          target_image="$${registry_url}/$${image_name}:$${image_tag}"
+
+          sudo -u rocky bash -lc "skopeo copy --all --dest-tls-verify=false containers-storage:$${image} docker://$${target_image}"
+        done
+      }
+
+      MGMT_IF=$(get_interface_by_index 1)
+      EXT_IF=$(get_interface_by_index 4)
+
+      if [[ -z "$${MGMT_IF}" || -z "$${EXT_IF}" ]]; then
+        echo "Failed to detect required network interfaces on the seed host"
+        exit 1
+      fi
+
+      dnf install -y git python3 python3-devel python3-libselinux libffi-devel gcc openssl-devel sshpass curl jq skopeo podman python3-podman
+
+      mkdir -p /etc/kolla /etc/ansible "$${KOLLA_HOME}"
+      chown -R rocky:rocky /etc/kolla "$${KOLLA_HOME}"
+      if [[ ! -d "$${VENV_PATH}" ]]; then
+        sudo -u rocky python3 -m venv "$${VENV_PATH}"
+      fi
+
+      sudo -u rocky "$${VENV_PATH}/bin/pip" install --upgrade pip
+      sudo -u rocky "$${VENV_PATH}/bin/pip" install 'ansible-core>=2.15,<2.16'
+      sudo -u rocky "$${VENV_PATH}/bin/pip" install "git+https://opendev.org/openstack/kolla-ansible@unmaintained/2024.1"
+
+      cp -r "$${VENV_PATH}/share/kolla-ansible/etc_examples/kolla/." /etc/kolla/
+      chown -R rocky:rocky /etc/kolla
+
+      cat > "$${ANSIBLE_CFG_PATH}" <<'EOF'
+      [defaults]
+      host_key_checking = False
+      pipelining = True
+      interpreter_python = auto_silent
+      EOF
+
+      cat > "$${INVENTORY_HOSTS_PATH}" <<'EOF'
+      [control]
+      control01 ansible_host=192.168.2.141 ansible_user=rocky ansible_password=rocky ansible_become=true ansible_become_password=rocky
+      control02 ansible_host=192.168.2.142 ansible_user=rocky ansible_password=rocky ansible_become=true ansible_become_password=rocky
+      control03 ansible_host=192.168.2.143 ansible_user=rocky ansible_password=rocky ansible_become=true ansible_become_password=rocky
+
+      [network:children]
+      control
+
+      [compute]
+      compute01 ansible_host=192.168.2.144 ansible_user=rocky ansible_password=rocky ansible_become=true ansible_become_password=rocky
+      compute02 ansible_host=192.168.2.145 ansible_user=rocky ansible_password=rocky ansible_become=true ansible_become_password=rocky
+
+      [monitoring]
+      control01
+
+      [storage]
+      control01
+
+      [deployment]
+      localhost ansible_connection=local
+      EOF
+
+      sed -n '1,/^\[deployment\]/{p; /^\[deployment\]/{n;p}}' "$${INVENTORY_HOSTS_PATH}" > "$${INVENTORY_PATH}.new"
+      sed -n '/^\[deployment\]/,$ p' "$${UPSTREAM_MULTINODE_PATH}" | tail -n +3 >> "$${INVENTORY_PATH}.new"
+      mv "$${INVENTORY_PATH}.new" "$${INVENTORY_PATH}"
+      chown -R rocky:rocky "$${KOLLA_HOME}"
+
+      write_globals no
+
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible install-deps'
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-genpwd'
+
+      wait_for_ssh 'control01' '192.168.2.141'
+      wait_for_ssh 'control02' '192.168.2.142'
+      wait_for_ssh 'control03' '192.168.2.143'
+      wait_for_ssh 'compute01' '192.168.2.144'
+      wait_for_ssh 'compute02' '192.168.2.145'
+
+      install_podman_on_node 'control01' 192.168.2.141
+      install_podman_on_node 'control02' 192.168.2.142
+      install_podman_on_node 'control03' 192.168.2.143
+      install_podman_on_node 'compute01' 192.168.2.144
+      install_podman_on_node 'compute02' 192.168.2.145
+
+      until curl -fsS "http://192.168.20.146:4000/v2/" >/dev/null; do
+        echo "Waiting for registry 192.168.20.146:4000"
+        sleep 10
+      done
+
+      ## Deployment order (fixed vs. the March 2026 run):
+      ## 1. bootstrap-servers first -> installs/configures podman on every
+      ##    target node (plus our manual python3-podman above),
+      ## 2. prechecks,
+      ## 3. pull from quay.io, then push the LAN registry for later
+      ##    redeploys, then deploy with docker_registry active.
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible bootstrap-servers -i /home/rocky/kolla-ansible/multinode'
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible prechecks -i /home/rocky/kolla-ansible/multinode'
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible pull -i /home/rocky/kolla-ansible/multinode'
+      sync_images_to_registry
+      write_globals yes
+
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible deploy -i /home/rocky/kolla-ansible/multinode'
+      sudo -u rocky bash -lc 'source /home/rocky/kolla-venv/bin/activate && kolla-ansible post-deploy -i /home/rocky/kolla-ansible/multinode'
+
+      mkdir -p "/home/rocky/.config/openstack"
+      cp /etc/kolla/admin-openrc.sh "/home/rocky/admin-openrc.sh"
+      cp /etc/kolla/clouds.yaml "/home/rocky/.config/openstack/clouds.yaml"
+      chown -R rocky:rocky "/home/rocky/admin-openrc.sh" "/home/rocky/.config"
+
+runcmd:
+  - systemctl enable --now chronyd
+  - |
+    cat <<'EOF' >> /etc/hosts
+    # kolla-ansible managed hosts
+    192.168.20.140 seed.fritz.box seed
+    192.168.20.141 control01.fritz.box control01
+    192.168.20.142 control02.fritz.box control02
+    192.168.20.143 control03.fritz.box control03
+    192.168.20.144 compute01.fritz.box compute01
+    192.168.20.145 compute02.fritz.box compute02
+    192.168.20.146 registry.fritz.box registry
+    EOF
+  - |
+    python3 - <<'PY'
+    from pathlib import Path
+    import socket
+
+    host = socket.gethostname().split('.')[0]
+    fqdn = socket.getfqdn()
+    p = Path('/etc/hosts')
+    out = []
+    for line in p.read_text().splitlines():
+        s = line.strip()
+        if s.startswith('127.0.0.1') or s.startswith('::1'):
+            parts = s.split()
+            keep = [parts[0]] + [name for name in parts[1:] if name not in {host, fqdn}]
+            if len(keep) > 1:
+                out.append(' '.join(keep))
+            continue
+        out.append(line)
+    p.write_text('\n'.join(out) + '\n')
+    PY
+  - nohup /root/bootstrap-kolla-seed.sh >/var/log/bootstrap-kolla-seed-cloud-init.log 2>&1 &
+  - |
+    cat > /etc/motd <<'EOF'
+    Welcome!
+
+    This system was provisioned using cloud-init (Kolla Ansible seed).
+    Kolla deployment runs in the background after first boot.
+
+    Logs:
+      tail -f /var/log/bootstrap-kolla-seed.log
+      tail -f /var/log/bootstrap-kolla-seed-cloud-init.log
+      tail -f /var/log/cloud-init-output.log
+    EOF
+
+final_message: |
+  Cloud-init finished.
+
+  Kolla Ansible bootstrap continues in the background.
+  Check:
+    tail -f /var/log/bootstrap-kolla-seed.log
+    tail -f /var/log/cloud-init-output.log
