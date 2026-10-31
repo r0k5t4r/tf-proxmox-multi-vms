@@ -3,7 +3,7 @@
 # "PasswordAuthentication no"; the bootstrap needs password SSH to the OSD
 # nodes (sshpass rocky/rocky), so re-enable it explicitly.
 ssh_pwauth: true
-package_update: true
+package_update: false
 package_upgrade: false
 
 packages:
@@ -18,6 +18,20 @@ write_files:
     permissions: "0755"
     content: |
       ${replace(ceph_bootstrap_script, "\n", "\n      ")}
+  - path: /etc/systemd/system/ceph-bootstrap.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Ceph bootstrap (cephadm, tentacle)
+      Wants=network-online.target
+      After=network-online.target cloud-init.service
+      [Service]
+      Type=oneshot
+      ExecStart=/root/bootstrap-ceph.sh
+      RemainAfterExit=yes
+      TimeoutSec=0
+      [Install]
+      WantedBy=multi-user.target
 
 runcmd:
   # Ensure time sync (important for Ceph quorum)
@@ -40,7 +54,7 @@ runcmd:
   - cephadm version
 
   # Bootstrap Ceph cluster (runs in background)
-  - /root/bootstrap-ceph.sh
+  - systemctl enable --now ceph-bootstrap.service
 
   # User guidance
   - |
