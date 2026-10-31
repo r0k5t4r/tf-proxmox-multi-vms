@@ -1,4 +1,8 @@
 #cloud-config
+# rocky-9-ci-template ships /etc/ssh/sshd_config.d/50-cloud-init.conf with
+# "PasswordAuthentication no"; the bootstrap needs password SSH to the OSD
+# nodes (sshpass rocky/rocky), so re-enable it explicitly.
+ssh_pwauth: true
 package_update: true
 package_upgrade: false
 
@@ -22,12 +26,12 @@ runcmd:
   # Enable container runtime
   - systemctl enable --now podman.socket
 
-  # Download cephadm
-  - curl -fsSL https://download.ceph.com/rpm-quincy/el9/noarch/cephadm -o /usr/sbin/cephadm
+  # Download cephadm (Tentacle = Ceph 20.2.x, current stable track)
+  - curl -fsSL https://download.ceph.com/rpm-tentacle/el9/noarch/cephadm -o /usr/sbin/cephadm
   - chmod +x /usr/sbin/cephadm
 
   # Add Ceph repository
-  - /usr/sbin/cephadm add-repo --release quincy
+  - /usr/sbin/cephadm add-repo --release tentacle
 
   # Install ceph tools
   - /usr/sbin/cephadm install ceph-common

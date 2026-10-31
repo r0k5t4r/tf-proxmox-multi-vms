@@ -31,3 +31,40 @@ ceph orch host add ${node.name}${domain != "" ? ".${domain}" : ""} ${node.ip}
 echo "Deploying OSDs"
 
 ceph orch apply osd --all-available-devices
+
+echo "Waiting for cluster healthy (up to 20 min) + OSDs up"
+
+for i in $(seq 1 40); do
+  HEALTH=$(ceph -s | grep -o "HEALTH_[A-Z]+" | head -1 || true)
+  OSDUP=$(ceph -s | grep -oE "osd: [0-9]+ osds: [0-9]+" | awk '{print $NF}' || echo 0)
+  echo "[$i/40] health=$HEALTH osds_up=$OSDUP"
+  if [ "${HEALTH}" = "HEALTH_OK" ] && [ "${OSDUP}" -ge 1 ]; then
+    break
+  fi
+  sleep 30
+done
+
+echo "Creating pools for OpenStack (cinder volumes / glance images)"
+
+ceph osd pool create volumes 64
+ceph osd pool application enable volumes rbd || true
+ceph osd pool create images 64
+ceph osd pool application enable images rbd || true
+
+echo "Creating client keyrings for OpenStack services"
+
+ceph auth get-or-create client.cinder \
+  mon 'profile rbd' \
+  osd 'profile rbd pool=volumes, profile rbd pool=images' \
+  mgr 'allow rw'
+ceph auth get-or-create client.glance \
+  mon 'profile rbd' \
+  osd 'profile rbd pool=images' \
+  mgr 'allow rw'
+
+# Export the keyrings next to /etc/ceph so the OpenStack seed can fetch them.
+ceph auth get-or-create client.cinder -o /opt/ceph.client.cinder.keyring
+ceph auth get-or-create client.glance -o /opt/ceph.client.glance.keyring
+chmod 600 /opt/ceph.client.*.keyring
+
+echo "Ceph bootstrap finished"
