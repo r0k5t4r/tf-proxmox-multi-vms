@@ -352,6 +352,24 @@ variable "foreman_compute_profiles" {
   default     = true
 }
 
+variable "foreman_registration_setup" {
+  description = "Setup the global registration: custom subscription_manager_setup snippet (ATIX SM for Debian/Ubuntu family), Global Registration (custom) template and the foreman_url setting"
+  type        = bool
+  default     = true
+}
+
+variable "foreman_public_url" {
+  description = "Public URL of the Foreman instance used in the /etc/foreman/settings.yaml foreman_url setting (matters for generated registration commands)"
+  type        = string
+  default     = "https://katello.fritz.box"
+}
+
+variable "katello_registration_token_hours" {
+  description = "JWT expiration in hours for generated global registration commands; 0 means unlimited"
+  type        = number
+  default     = 0
+}
+
 variable "foreman_compute_profile_list" {
   description = "Compute profiles to create: name, cores, memory (MB), disk size (GB) on zfs_vms with a virtio net0 interface on vmbr0"
   type = list(object({

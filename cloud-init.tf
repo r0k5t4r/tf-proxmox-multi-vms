@@ -51,6 +51,10 @@ locals {
       foreman_proxmox_password     = var.foreman_proxmox_password
       foreman_compute_profiles     = var.foreman_compute_profiles
       foreman_compute_profile_list = var.foreman_compute_profile_list
+      register_snippet_body        = file("${path.module}/templates/foreman/subscription_manager_setup.erb")
+      register_template_body       = file("${path.module}/templates/foreman/global_registration_custom.erb")
+      foreman_public_url           = var.foreman_public_url
+      foreman_registration_setup   = var.foreman_registration_setup
     }
   ) : ""
 

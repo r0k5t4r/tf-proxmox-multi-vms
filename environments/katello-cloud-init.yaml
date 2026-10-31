@@ -67,6 +67,15 @@ write_files:
     permissions: "0755"
     content: |
       ${replace(katello_repos_script, "\n", "\n      ")}
+  - path: /root/katello-snippets/subscription_manager_setup.erb
+    permissions: "0644"
+    content: |
+      ${replace(register_snippet_body, "\n", "\n      ")}
+  - path: /root/katello-snippets/global_registration_custom.erb
+    permissions: "0644"
+    content: |
+      ${replace(register_template_body, "\n", "\n      ")}
+
 %{ endif }
 
 runcmd:

@@ -257,6 +257,84 @@ else
 fi
 %{ endfor ~}
 %{ endif ~}
+fi
+
+%{ if foreman_registration_setup ~}
+# ------------------------------------------------------------------
+# Global registration for all supported OSes:
+#   - custom "subscription_manager_setup (custom)" snippet (ATIX subscription-
+#     manager for the Debian/Ubuntu family vendors since SM is not shipped
+#     by Ubuntu/Debian)
+#   - "Global Registration (custom)" default global template that uses the
+#     custom snippet
+#   - foreman_url setting so registration commands point at the correct URL
+# ------------------------------------------------------------------
+echo "==== Creating registration templates ===="
+HCONF=/root/.hammer/cli_config.yml
+UHOST=$(awk '/:host:/{print $2}' "$HCONF")
+UUSER=$(awk '/:username:/{print $2}' "$HCONF")
+UPASS=$(awk '/:password:/{print $2}' "$HCONF")
+SNIP_FILE=/root/katello-snippets/subscription_manager_setup.erb
+TPL_FILE=/root/katello-snippets/global_registration_custom.erb
+
+if [ -f "$SNIP_FILE" ]; then
+  SID=$(curl -sk -u "$UUSER:$UPASS" "$UHOST/api/provisioning_templates?search=name%3D%22subscription_manager_setup%20(custom)%22" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+  if [ -n "$SID" ]; then
+    python3 - "$SID" "$SNIP_FILE" "$UHOST" "$UUSER" "$UPASS" <<'PYEOF'
+import json, sys, urllib.request, ssl
+sid, snipfile, host, user, passwd = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode = ssl.CERT_NONE
+body = open(snipfile).read()
+data = json.dumps({"provisioning_template": {"template": body, "name": "subscription_manager_setup (custom)", "snippet": True}})
+req = urllib.request.Request(host + "/api/provisioning_templates/" + sid, data=data.encode(), method="PUT",
+      headers={"Content-Type": "application/json"});
+import base64
+req.add_header("Authorization", "Basic " + base64.b64encode((user + ":" + passwd).encode()).decode())
+print(urllib.request.urlopen(req, context=ctx).status)
+PYEOF
+    echo "snippet 'subscription_manager_setup (custom)' updated"
+  else
+    hammer template create --name "subscription_manager_setup (custom)" --snippet --file "$SNIP_FILE" >/dev/null 2>&1 && echo "snippet created" || echo "WARN: snippet create failed"
+  fi
+else
+  echo "WARN: $SNIP_FILE missing"
+fi
+
+if [ -f "$TPL_FILE" ]; then
+  GID=$(curl -sk -u "$UUSER:$UPASS" "$UHOST/api/provisioning_templates?search=name%3D%22Global%20Registration%20(custom)%22" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+  if [ -n "$GID" ]; then
+    python3 - "$GID" "$TPL_FILE" "$UHOST" "$UUSER" "$UPASS" <<'PYEOF'
+import json, sys, urllib.request, ssl, base64
+gid, tplfile, host, user, passwd = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode = ssl.CERT_NONE
+body = open(tplfile).read()
+data = json.dumps({"provisioning_template": {"template": body, "name": "Global Registration (custom)", "kind_id": 12}})
+req = urllib.request.Request(host + "/api/provisioning_templates/" + gid, data=data.encode(), method="PUT",
+      headers={"Content-Type": "application/json"})
+req.add_header("Authorization", "Basic " + base64.b64encode((user + ":" + passwd).encode()).decode())
+print(urllib.request.urlopen(req, context=ctx).status)
+PYEOF
+    echo "template 'Global Registration (custom)' updated"
+  else
+    hammer template create --name "Global Registration (custom)" --kind registration --file "$TPL_FILE" >/dev/null 2>&1 && echo "template created" || echo "WARN: template create failed"
+  fi
+  # Make the custom template the default for global registration
+  BGID=$(printf '{"setting":{"value":"Global Registration (custom)"}}')
+  RESP_S=$(curl -sk -u "$UUSER:$UPASS" -H "Content-Type: application/json" -X PUT -d "$BGID" "$UHOST/api/settings/default_global_registration_item")
+  echo "$RESP_S" | grep -q '"custom"' && echo "default_global_registration_item set" || echo "WARN: default_global_registration_item failed"
+else
+  echo "WARN: $TPL_FILE missing"
+fi
+
+# Point foreman_url at the public URL (used in the generated commands)
+if grep -q "^:foreman_url:" /etc/foreman/settings.yaml; then
+  CUR_URL=$(sed 's/^:foreman_url: *//' /etc/foreman/settings.yaml | head -1)
+  if [ "$CUR_URL" != "${foreman_public_url}" ]; then
+    sed -i "s|^:foreman_url:.*|:foreman_url: ${foreman_public_url}|" /etc/foreman/settings.yaml
+    echo "foreman_url updated to ${foreman_public_url}, restarting foreman"
+    systemctl restart foreman
+  fi
+fi
 %{ endif ~}
 
 echo "==== Katello content setup finished ===="

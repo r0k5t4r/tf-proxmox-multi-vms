@@ -38,7 +38,7 @@ for i in $(seq 1 40); do
   HEALTH=$(ceph -s | grep -o "HEALTH_[A-Z]+" | head -1 || true)
   OSDUP=$(ceph -s | grep -oE "osd: [0-9]+ osds: [0-9]+" | awk '{print $NF}' || echo 0)
   echo "[$i/40] health=$HEALTH osds_up=$OSDUP"
-  if [ "${HEALTH}" = "HEALTH_OK" ] && [ "${OSDUP}" -ge 1 ]; then
+  if [ "$${HEALTH}" = "HEALTH_OK" ] && [ "$${OSDUP}" -ge 1 ]; then
     break
   fi
   sleep 30
