@@ -38,6 +38,9 @@ write_files:
       nameserver ${nameserver}
 
 runcmd:
+  # TCP send buffer up: default 48K caps vioif TX at ~1.8 Gbit/s (see
+  # tf-creator-omnios README — 1MB gives ~2.5-3.7 Gbit/s single stream)
+  - /usr/bin/ipadm set-prop -p send_maxbuf=1048576 tcp || true
   - |
     cat > /etc/motd <<'EOF'
 

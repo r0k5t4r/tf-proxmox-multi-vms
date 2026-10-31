@@ -1,0 +1,12 @@
+#cloud-config
+
+package_update: false
+package_upgrade: false
+
+# Katello global registration (AK Rocky 9, unlimited JWT), must run as root
+runcmd:
+  - set -o pipefail
+  - |
+    curl --silent --show-error --insecure 'https://katello.fritz.box/register?activation_keys=AK+Rocky+9&location_id=2&organization_id=1' --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjo0LCJpYXQiOjE3OTM0MzA1NjEsImp0aSI6IjU4MDY0Y2Y2ZDU3MDdlY2YyNzE4NWFhN2Y1MWJlN2E5NzYzYmYxNTA3MDJkMTg3OGViMmU4MWY0ZjMyY2I0MjAiLCJzY29wZSI6InJlZ2lzdHJhdGlvbiNnbG9iYWwgcmVnaXN0cmF0aW9uI2hvc3QifQ.gjVArdargmi2s11ZQKV0BoWqP7_v6bY_NaHB8I4EG6M' | bash
+
+final_message: "Cloud-init + registration finished"
